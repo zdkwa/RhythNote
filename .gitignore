@@ -23,6 +23,7 @@ scripts-*.py
 ui-*.png
 launch-rhythnote.cmd
 probe-rust.txt
+/RhythNote.exe
 /RhythNote节律待办
 
 # Editor directories and files
