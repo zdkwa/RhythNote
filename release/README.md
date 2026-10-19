@@ -18,6 +18,16 @@ GitHub Release：<https://github.com/zdkwa/RhythNote/releases/tag/v0.1.0>
 2. 安装包未做代码签名，若 Windows SmartScreen 提示，选择“更多信息 → 仍要运行”。
 3. 也可以直接运行便携版 `RhythNote.exe`，无需安装。
 
+## Windows 运行要求
+
+请使用**标准用户**运行，或对内置 Administrator 开启 UAC 管理员批准模式后重启。不要使用高完整性管理员令牌直接运行，否则 WebView2 会创建失败（闪退，异常代码 `0xc0000409`）。
+
+```powershell
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v FilterAdministratorToken /t REG_DWORD /d 1 /f
+```
+
+若启动失败，请查看 `%TEMP%\RhythNote-crash.log`。
+
 ## SHA256
 
 ```text
