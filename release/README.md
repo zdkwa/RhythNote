@@ -1,22 +1,22 @@
 # RhythNote V1 发布文件
 
-版本：`0.1.0`（已发布）；`0.1.1` 已完成本地打包，暂未上传 GitHub
+版本：`0.1.1`
 平台：Windows 10/11 x64
 构建日期：2026-10-19
-GitHub Release：<https://github.com/zdkwa/RhythNote/releases/tag/v0.1.0>
+GitHub Release：<https://github.com/zdkwa/RhythNote/releases/tag/v0.1.1>
 
-> `0.1.1` 包含首页仪表板、当前时段统计、临时任务排序、逾期宽限与完成按钮调整；安装包保留在本地，未上传 Release。
+> `0.1.1` 包含首页仪表板、当前时段统计、临时任务排序、逾期宽限与完成按钮调整。
 
 ## 下载
 
 | 文件 | 用途 | 大小 |
 |---|---|---|
-| [RhythNote_0.1.0_x64-setup.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.0/RhythNote_0.1.0_x64-setup.exe) | NSIS 安装包，推荐普通用户使用 | 2.33 MiB |
-| [RhythNote.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.0/RhythNote.exe) | 便携版，下载后直接运行 | 6.24 MiB |
+| [RhythNote_0.1.1_x64-setup.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.1/RhythNote_0.1.1_x64-setup.exe) | NSIS 安装包，推荐普通用户使用 | 2.33 MiB |
+| [RhythNote.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.1/RhythNote.exe) | 便携版，下载后直接运行 | 6.25 MiB |
 
 ## 安装 / 运行
 
-1. 下载 `RhythNote_0.1.0_x64-setup.exe`，双击按向导安装。
+1. 下载 `RhythNote_0.1.1_x64-setup.exe`，双击按向导安装。
 2. 安装包未做代码签名，若 Windows SmartScreen 提示，选择“更多信息 → 仍要运行”。
 3. 也可以直接运行便携版 `RhythNote.exe`，无需安装。
 
@@ -34,10 +34,10 @@ reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v Filt
 
 ```text
 RhythNote.exe
-EA558EDB6E60F57CF3DC30F75A60838DAD7318B69936E3E51B35B263FCD466B5
+B73AE23C275E09887121176E686DCA1F83B852E67E112AC22ABE0FE63CADE0F0
 
-RhythNote_0.1.0_x64-setup.exe
-724D5B26333E53E7C6BDB072E1BA39861A387F3DC2168D9F88C9693AEB4FD466
+RhythNote_0.1.1_x64-setup.exe
+7EF501BEA8EA947429C53092E68E92A6C6A1AE84B467AADDE24C1759DE1EF0CC
 ```
 
 ## 数据位置
