@@ -36,6 +36,7 @@ import {
   timeRangeLabel,
   timestampToDateKey,
 } from "@/lib/date";
+import { isTaskOverdue } from "@/domain/day";
 import { describeRecurrence } from "@/lib/recurrence";
 
 export type DayCardMode = "active" | "paused" | "history";
@@ -43,6 +44,7 @@ export type DayCardMode = "active" | "paused" | "history";
 export interface DayTaskCardProps {
   item: DayItem;
   today: string;
+  nowTime: string;
   mode: DayCardMode;
   pendingKey: string | null;
   onToggleCompletion: (item: DayItem) => Promise<void>;
@@ -72,6 +74,7 @@ function completionLabel(timestamp: string, date: string): string {
 export function DayTaskCard({
   item,
   today,
+  nowTime,
   mode,
   pendingKey,
   onToggleCompletion,
@@ -88,8 +91,9 @@ export function DayTaskCard({
 
   const isArchived = item.isArchived || Boolean(task.archivedAt);
   const isFuture = date > today;
-  const isPast = date < today;
   const done = isItemDone(item);
+  const isOverdue =
+    !item.isPaused && isTaskOverdue(task, date, done, today, nowTime);
   const isHistory = mode === "history";
   const completedAt = itemCompletedAt(item);
   const note = itemNote(item);
@@ -172,10 +176,15 @@ export function DayTaskCard({
                 {TYPE_LABEL[task.type]}
               </Badge>
             )}
-            <Badge variant={PRIORITY_VARIANT[task.priority]}>
-              {PRIORITY_LABEL[task.priority]}
-            </Badge>
+            {task.type === "once" ? (
+              <Badge variant={PRIORITY_VARIANT[task.priority]}>
+                {PRIORITY_LABEL[task.priority]}
+              </Badge>
+            ) : null}
             {done ? <Badge variant="done">已完成</Badge> : null}
+            {!done && isOverdue ? (
+              <Badge variant="destructive">逾期</Badge>
+            ) : null}
             {item.isBackfilled ? <Badge variant="backfill">补做</Badge> : null}
             {isArchived ? (
               <Badge variant="archived" className="gap-1">
@@ -276,13 +285,13 @@ export function DayTaskCard({
               {done ? (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   onClick={() => {
                     void handleToggle();
                   }}
                   disabled={busy}
-                  className="gap-1.5"
+                  className="gap-1.5 border-destructive/35 bg-destructive/[0.04] text-destructive hover:bg-destructive/10"
                 >
                   {togglePending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -301,14 +310,18 @@ export function DayTaskCard({
                   }}
                   disabled={isFuture || busy}
                   title={isFuture ? "未来日期不可打卡" : undefined}
-                  className="gap-1.5"
+                  className={`gap-1.5 border-transparent text-white ${
+                    isOverdue
+                      ? "bg-amber-500 hover:bg-amber-600"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
                 >
                   {togglePending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Check className="h-3.5 w-3.5" />
                   )}
-                  {isPast ? "补做完成" : "完成"}
+                  {isOverdue ? "补做" : "完成"}
                 </Button>
               )}
 

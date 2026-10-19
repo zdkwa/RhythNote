@@ -1,33 +1,194 @@
 import { useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
-import { PageHeader } from "@/components/layout/page-header";
+import { format } from "date-fns";
+import {
+  ArrowRight,
+  CalendarDays,
+  Check,
+  Clock3,
+  ListTodo,
+  PauseCircle,
+  Sparkles,
+  Undo2,
+} from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useDayActions } from "@/features/day/use-day-actions";
+import { isItemDone } from "@/features/day/day-items";
 import { useWorkspaceBundle } from "@/data/queries";
-import { useToday } from "@/hooks/useToday";
-import { buildCalendarSummaries } from "@/domain/day";
+import { useClock, useToday } from "@/hooks/useToday";
+import {
+  buildCalendarSummaries,
+  buildDaySummary,
+  isTaskOverdue,
+  isTodayWithinBlock,
+} from "@/domain/day";
 import {
   addMonthsKey,
+  dateWithWeekday,
   isValidMonthKey,
   monthGridRange,
+  nowTimeKey,
   parseDateKey,
+  timeRangeLabel,
   toMonthKey,
 } from "@/lib/date";
+import { PRIORITY_ORDER, type DayItem } from "@/types/domain";
 import { CalendarLegend } from "@/features/calendar/calendar-legend";
 import { CalendarSkeleton } from "@/features/calendar/calendar-skeleton";
 import { MonthCalendar } from "@/features/calendar/month-calendar";
 import { MonthToolbar } from "@/features/calendar/month-toolbar";
 import { toTaskPauses } from "@/features/records/pause-utils";
 import { QueryErrorBar } from "@/features/records/query-error-bar";
+import { cn } from "@/lib/utils";
+
+function StatCard({
+  label,
+  value,
+  suffix,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  suffix?: string;
+  hint: string;
+  tone?: "primary" | "danger" | "warm" | "neutral";
+}) {
+  const toneClass = {
+    primary: "border-primary/25 bg-primary/[0.06]",
+    danger: "border-destructive/20 bg-destructive/[0.045]",
+    warm: "border-accent/25 bg-accent/[0.055]",
+    neutral: "border-border/80 bg-card/55",
+  }[tone ?? "neutral"];
+
+  return (
+    <div className={cn("rounded-2xl border px-4 py-3.5", toneClass)}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-2 flex items-baseline gap-1">
+        <span className="display-number text-3xl font-semibold leading-none">
+          {value}
+        </span>
+        {suffix ? (
+          <span className="text-xs font-medium text-muted-foreground">
+            {suffix}
+          </span>
+        ) : null}
+      </p>
+      <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
+function DashboardTaskRow({
+  item,
+  today,
+  now,
+  busy,
+  onToggle,
+}: {
+  item: DayItem;
+  today: string;
+  now: string;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  const done = isItemDone(item);
+  const isOnce = item.task.type === "once";
+  const overdue = isTaskOverdue(item.task, item.date, done, today, now);
+  const time = timeRangeLabel(
+    item.task.startTime,
+    item.task.endTime,
+    item.task.timeSemantic,
+  );
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-3 rounded-xl border border-border/70 bg-card/60 px-3 py-2.5 transition-colors",
+        done && "opacity-60",
+      )}
+    >
+      <Link
+        to={`/day/${item.date}`}
+        className="min-w-0 flex-1"
+      >
+        <span className={cn("block truncate text-sm font-medium", done && "line-through")}>
+          {item.task.title}
+        </span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+          <span className="tabular-nums">{time}</span>
+          {item.task.category ? (
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: item.task.category.color }}
+              />
+              {item.task.category.name}
+            </span>
+          ) : null}
+          {isOnce ? <Badge variant="outline" className="px-1.5 py-0 text-[9px]">临时</Badge> : null}
+          {!done && overdue ? (
+            <Badge variant="destructive" className="px-1.5 py-0 text-[9px]">
+              逾期
+            </Badge>
+          ) : null}
+          {item.isPaused ? (
+            <span className="inline-flex items-center gap-1 text-amber-600">
+              <PauseCircle className="h-2.5 w-2.5" />
+              暂停
+            </span>
+          ) : null}
+        </span>
+      </Link>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={busy || item.isPaused || item.isArchived || item.date > today}
+        className={cn(
+          "ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2.5 text-[10px] font-semibold transition-colors",
+          done
+            ? "border-destructive/35 bg-destructive/[0.06] text-destructive hover:bg-destructive/10"
+            : overdue
+              ? "border-amber-500/50 bg-amber-500 text-white hover:bg-amber-600"
+              : "border-emerald-600/50 bg-emerald-600 text-white hover:bg-emerald-700",
+          (busy || item.isPaused || item.isArchived) && "cursor-not-allowed opacity-50",
+        )}
+        aria-label={
+          done
+            ? `取消完成：${item.task.title}`
+            : overdue
+              ? `补做：${item.task.title}`
+              : `完成：${item.task.title}`
+        }
+        title={done ? "取消完成" : overdue ? "补做" : "完成"}
+      >
+        {done ? (
+          <Undo2 className="h-3 w-3" />
+        ) : (
+          <Check className="h-3 w-3" />
+        )}
+        {done ? "取消完成" : overdue ? "补做" : "完成"}
+      </button>
+    </div>
+  );
+}
 
 export function HomePage() {
   const today = useToday();
+  const clock = useClock(1_000);
+  const now = nowTimeKey(clock);
+  const clockText = format(clock, "HH:mm:ss");
   const [params, setParams] = useSearchParams();
   const currentMonthKey = toMonthKey(parseDateKey(today));
 
   const rawMonth = params.get("month");
   const monthKey = isValidMonthKey(rawMonth) ? rawMonth : currentMonthKey;
 
-  // 非法 month 参数回退到当前月，并把 URL 规范化为合法值。
   useEffect(() => {
     if (rawMonth === null || isValidMonthKey(rawMonth)) return;
     const updated = new URLSearchParams(params);
@@ -35,20 +196,99 @@ export function HomePage() {
     setParams(updated, { replace: true });
   }, [rawMonth, currentMonthKey, params, setParams]);
 
+  const todayBundle = useWorkspaceBundle(today, today, true);
+  const todayPauses = useMemo(
+    () => toTaskPauses(todayBundle.pauses),
+    [todayBundle.pauses],
+  );
+  const todaySummary = useMemo(
+    () =>
+      buildDaySummary(
+        today,
+        todayBundle.tasks,
+        todayBundle.records,
+        todayPauses,
+      ),
+    [today, todayBundle.tasks, todayBundle.records, todayPauses],
+  );
+
   const grid = useMemo(() => monthGridRange(monthKey), [monthKey]);
-  const bundle = useWorkspaceBundle(grid.start, grid.end, true);
-  const pauses = useMemo(() => toTaskPauses(bundle.pauses), [bundle.pauses]);
+  const monthBundle = useWorkspaceBundle(grid.start, grid.end, true);
+  const monthPauses = useMemo(
+    () => toTaskPauses(monthBundle.pauses),
+    [monthBundle.pauses],
+  );
   const summaries = useMemo(
     () =>
       buildCalendarSummaries({
-        tasks: bundle.tasks,
-        records: bundle.records,
-        pauses,
+        tasks: monthBundle.tasks,
+        records: monthBundle.records,
+        pauses: monthPauses,
         start: grid.start,
         end: grid.end,
       }),
-    [bundle.tasks, bundle.records, pauses, grid.start, grid.end],
+    [
+      monthBundle.tasks,
+      monthBundle.records,
+      monthPauses,
+      grid.start,
+      grid.end,
+    ],
   );
+
+  const actions = useDayActions(today);
+
+  const currentAllItems = useMemo(
+    () =>
+      todaySummary.items
+        .filter(
+          (item) =>
+            item.kind === "scheduled" &&
+            !item.isPaused &&
+            !isItemDone(item) &&
+            isTodayWithinBlock(item.task, item.date, today, now),
+        )
+        .sort(
+          (a, b) =>
+            (a.task.startTime ?? "24:00").localeCompare(
+              b.task.startTime ?? "24:00",
+            ),
+        ),
+    [todaySummary.items, today, now],
+  );
+
+  const currentItems = useMemo(
+    () => currentAllItems.filter((item) => item.task.type === "recurring"),
+    [currentAllItems],
+  );
+
+  const unfinishedTemporaryItems = useMemo(
+    () =>
+      todaySummary.items
+        .filter(
+          (item) =>
+            item.task.type === "once" &&
+            item.kind === "scheduled" &&
+            !item.isPaused &&
+            !isItemDone(item),
+        )
+        .sort((a, b) => {
+          const aCurrent = isTodayWithinBlock(a.task, a.date, today, now);
+          const bCurrent = isTodayWithinBlock(b.task, b.date, today, now);
+          if (aCurrent !== bCurrent) return aCurrent ? -1 : 1;
+
+          const priority =
+            PRIORITY_ORDER[a.task.priority] - PRIORITY_ORDER[b.task.priority];
+          if (priority !== 0) return priority;
+
+          return (a.task.startTime ?? "24:00").localeCompare(
+            b.task.startTime ?? "24:00",
+          );
+        }),
+    [todaySummary.items, today, now],
+  );
+
+  const temporaryItems = unfinishedTemporaryItems.slice(0, 5);
 
   const goToMonth = (nextMonth: string) => {
     const updated = new URLSearchParams(params);
@@ -56,54 +296,267 @@ export function HomePage() {
     setParams(updated, { replace: true });
   };
 
-  const hasData =
-    bundle.tasks.length > 0 ||
-    bundle.records.length > 0 ||
-    bundle.pauses.length > 0;
-  const showSkeleton = bundle.isLoading || (bundle.isError && !hasData);
+  const hasTodayData =
+    todayBundle.tasks.length > 0 ||
+    todayBundle.records.length > 0 ||
+    todayBundle.pauses.length > 0;
+  const todayLoading =
+    todayBundle.isLoading || (todayBundle.isError && !hasTodayData);
+  const calendarLoading =
+    monthBundle.isLoading ||
+    (monthBundle.isError &&
+      monthBundle.tasks.length === 0 &&
+      monthBundle.records.length === 0);
 
+  const remaining = Math.max(0, todaySummary.total - todaySummary.done);
+  const progress =
+    todaySummary.total > 0
+      ? Math.round((todaySummary.done / todaySummary.total) * 100)
+      : 0;
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex flex-1 flex-col gap-5">
-        <PageHeader
-          eyebrow="Calendar / Month"
-          title="节律月历"
-          description="每天完成多少、漏掉多少，一眼看清。点击日期进入当天安排；月历只读，不会生成任何记录。"
-          actions={
-            <MonthToolbar
-              monthKey={monthKey}
-              isCurrentMonth={monthKey === currentMonthKey}
-              onPrevMonth={() => goToMonth(addMonthsKey(monthKey, -1))}
-              onNextMonth={() => goToMonth(addMonthsKey(monthKey, 1))}
-              onToday={() => goToMonth(currentMonthKey)}
-            />
-          }
-        />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap items-end gap-5">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                今天
+              </p>
+              <p className="mt-1 text-2xl font-semibold leading-none">
+                {dateWithWeekday(today)}
+              </p>
+            </div>
+            <span className="mb-1 hidden h-9 w-px bg-border/80 sm:block" />
+            <div className="flex items-baseline gap-2">
+              <span className="flex items-center gap-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                <Clock3 className="h-3.5 w-3.5" />
+                现在
+              </span>
+              <span className="display-number text-2xl font-semibold leading-none tabular-nums">
+                {clockText}
+              </span>
+            </div>
+          </div>
+          <Button variant="outline" asChild>
+            <Link to={`/day/${today}`}>
+              <CalendarDays className="h-4 w-4" />
+              今日详情
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
 
-        {bundle.isError ? (
+        {todayBundle.isError ? (
           <QueryErrorBar
-            message="月历数据加载失败，已保留页面结构，请重试。"
-            onRetry={bundle.refetch}
+            message="今日数据加载失败，请重试。"
+            onRetry={todayBundle.refetch}
           />
         ) : null}
 
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            周一开始 · 固定 6 行视图 · 外月日期淡化但仍可点击
-          </p>
-          <CalendarLegend />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="今日完成"
+            value={todaySummary.done}
+            hint={
+              progress >= 100 && todaySummary.total > 0
+                ? "今天的安排全部完成"
+                : "今天已经完成的任务数"
+            }
+            tone="primary"
+          />
+          <StatCard
+            label="待完成"
+            value={remaining}
+            suffix="项"
+            hint={remaining > 0 ? "先处理当前时间段的任务" : "今天暂时没有未完成项"}
+            tone={remaining > 0 ? "danger" : "neutral"}
+          />
+          <StatCard
+            label="当前时段"
+            value={currentAllItems.length}
+            suffix="项进行中"
+            hint={
+              currentAllItems.length > 0
+                ? "优先完成正在进行的任务"
+                : "当前没有进行中的任务"
+            }
+            tone="warm"
+          />
+          <div className="rounded-2xl border border-border/80 bg-card/55 px-4 py-3.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              今日节奏
+            </p>
+            <div className="mt-2 flex items-center gap-3">
+              <div
+                className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+                style={{
+                  background: `conic-gradient(hsl(var(--cal-green)) ${progress * 3.6}deg, hsl(var(--muted)) 0deg)`,
+                }}
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-card text-xs font-semibold tabular-nums">
+                  {progress}%
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {todaySummary.total === 0
+                    ? "今天还没有安排"
+                    : progress >= 100
+                      ? "今天完成得很漂亮"
+                      : "按自己的节律来"}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                  {todaySummary.paused > 0
+                    ? `另有 ${todaySummary.paused} 项暂停`
+                    : "完成、补做与备注都会留下记录"}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {showSkeleton ? (
-          <CalendarSkeleton />
-        ) : (
-          <MonthCalendar
-            days={grid.days}
-            monthKey={monthKey}
-            today={today}
-            summaries={summaries}
-          />
-        )}
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="space-y-4">
+            <section className="paper-panel rounded-2xl p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                    Focus
+                  </p>
+                  <h2 className="mt-0.5 font-display text-xl font-semibold">
+                    正在做
+                  </h2>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    只展示当前时间段内正在进行中的循环任务
+                  </p>
+                </div>
+              </div>
+
+              {todayLoading ? (
+                <div className="mt-3 space-y-2">
+                  <div className="h-12 animate-pulse rounded-xl bg-muted/70" />
+                  <div className="h-12 animate-pulse rounded-xl bg-muted/50" />
+                </div>
+              ) : currentItems.length === 0 ? (
+                <div className="mt-3 flex items-center gap-3 rounded-xl border border-dashed border-border/80 px-3 py-4 text-sm text-muted-foreground">
+                  <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+                  <span>当前没有正在进行的循环任务。</span>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {currentItems.map((item) => (
+                    <DashboardTaskRow
+                      key={item.key}
+                      item={item}
+                      today={today}
+                      now={now}
+                      busy={actions.pendingKey !== null}
+                      onToggle={() => void actions.toggleCompletion(item)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="paper-panel rounded-2xl p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
+                    One-off
+                  </p>
+                  <h2 className="mt-0.5 font-display text-xl font-semibold">
+                    未完成的临时任务
+                  </h2>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    当前时段优先 → 优先级 → 时间，最多展示 5 项
+                  </p>
+                </div>
+                <Badge variant="outline" className="gap-1">
+                  <ListTodo className="h-3 w-3" />
+                  {unfinishedTemporaryItems.length} 项
+                </Badge>
+              </div>
+
+              {temporaryItems.length === 0 ? (
+                <div className="mt-3 rounded-xl border border-dashed border-border/80 px-3 py-4 text-sm text-muted-foreground">
+                  今天没有未完成的临时任务。
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {temporaryItems.map((item) => (
+                    <DashboardTaskRow
+                      key={item.key}
+                      item={item}
+                      today={today}
+                      now={now}
+                      busy={actions.pendingKey !== null}
+                      onToggle={() => void actions.toggleCompletion(item)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {unfinishedTemporaryItems.length > temporaryItems.length ? (
+                <Link
+                  to="/tasks/once"
+                  className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                >
+                  还有 {unfinishedTemporaryItems.length - temporaryItems.length} 项未完成，查看全部临时任务
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              ) : null}
+            </section>
+          </div>
+
+          <section className="paper-panel rounded-2xl p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                  Calendar
+                </p>
+                <h2 className="font-display text-xl font-semibold">月度节律</h2>
+              </div>
+              <MonthToolbar
+                monthKey={monthKey}
+                isCurrentMonth={monthKey === currentMonthKey}
+                onPrevMonth={() => goToMonth(addMonthsKey(monthKey, -1))}
+                onNextMonth={() => goToMonth(addMonthsKey(monthKey, 1))}
+                onToday={() => goToMonth(currentMonthKey)}
+              />
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
+              <p className="text-[10px] text-muted-foreground">
+                点击日期查看当天安排；未来日期显示为“未开始”
+              </p>
+              <CalendarLegend />
+            </div>
+
+            {monthBundle.isError ? (
+              <div className="mt-2">
+                <QueryErrorBar
+                  message="月历数据加载失败，请重试。"
+                  onRetry={monthBundle.refetch}
+                />
+              </div>
+            ) : null}
+
+            <div className="mt-2">
+              {calendarLoading ? (
+                <CalendarSkeleton />
+              ) : (
+                <MonthCalendar
+                  days={grid.days}
+                  monthKey={monthKey}
+                  today={today}
+                  summaries={summaries}
+                  compact
+                />
+              )}
+            </div>
+          </section>
+        </div>
+
       </div>
     </TooltipProvider>
   );

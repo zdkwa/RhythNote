@@ -1,9 +1,11 @@
 # RhythNote V1 发布文件
 
-版本：`0.1.0`  
-平台：Windows 10/11 x64  
-构建日期：2026-10-19  
+版本：`0.1.0`（已发布）；`0.1.1` 已完成本地打包，暂未上传 GitHub
+平台：Windows 10/11 x64
+构建日期：2026-10-19
 GitHub Release：<https://github.com/zdkwa/RhythNote/releases/tag/v0.1.0>
+
+> `0.1.1` 包含首页仪表板、当前时段统计、临时任务排序、逾期宽限与完成按钮调整；安装包保留在本地，未上传 Release。
 
 ## 下载
 

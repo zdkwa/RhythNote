@@ -44,6 +44,7 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
   const navigate = useNavigate();
   const today = useToday();
   const clock = useClock(30_000);
+  const nowTime = nowTimeKey(clock);
   const valid = isValidDateKey(date);
 
   const bundle = useWorkspaceBundle(
@@ -62,7 +63,7 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
   const groups = useMemo(
     () =>
       summary
-        ? groupDayItems(summary.items, today, nowTimeKey(clock))
+        ? groupDayItems(summary.items, today, nowTime)
         : { unfinished: [], completed: [], paused: [], history: [] },
     [summary, today, clock],
   );
@@ -172,12 +173,6 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
         eyebrow="Day / Detail"
         title={dateWithWeekday(date)}
         description={description}
-        actions={
-          <Button type="button" onClick={openCreate} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            新建任务
-          </Button>
-        }
       />
 
       {midnightNotice && !isToday ? (
@@ -215,6 +210,7 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
           <DayProgressSummary
             summary={summary}
             historyCount={historyTotal}
+            isFuture={isFuture}
           />
 
           {isEmpty ? (
@@ -251,6 +247,7 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
                     key={item.key}
                     item={item}
                     today={today}
+                    nowTime={nowTime}
                     mode="active"
                     pendingKey={actions.pendingKey}
                     onToggleCompletion={actions.toggleCompletion}
@@ -272,6 +269,7 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
                       key={item.key}
                       item={item}
                       today={today}
+                      nowTime={nowTime}
                       mode={item.kind === "scheduled" ? "active" : "history"}
                       pendingKey={actions.pendingKey}
                       onToggleCompletion={actions.toggleCompletion}
@@ -295,6 +293,7 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
                       key={item.key}
                       item={item}
                       today={today}
+                      nowTime={nowTime}
                       mode="paused"
                       pendingKey={actions.pendingKey}
                       onToggleCompletion={actions.toggleCompletion}
@@ -317,6 +316,7 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
                       key={item.key}
                       item={item}
                       today={today}
+                      nowTime={nowTime}
                       mode="history"
                       pendingKey={actions.pendingKey}
                       onToggleCompletion={actions.toggleCompletion}

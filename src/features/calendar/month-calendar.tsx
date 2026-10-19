@@ -16,6 +16,7 @@ export interface MonthCalendarProps {
   monthKey: string;
   today: string;
   summaries: Map<string, DaySummary>;
+  compact?: boolean;
 }
 
 /**
@@ -27,6 +28,7 @@ export function MonthCalendar({
   monthKey,
   today,
   summaries,
+  compact = false,
 }: MonthCalendarProps) {
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -47,13 +49,13 @@ export function MonthCalendar({
   return (
     <section
       aria-label="月历"
-      className="paper-panel rounded-2xl p-3 sm:p-4"
+      className={compact ? "rounded-xl border border-border/60 bg-card/35 p-1.5" : "paper-panel rounded-2xl p-3 sm:p-4"}
     >
-      <div className="mb-2 grid grid-cols-7 gap-1.5 px-0.5">
+      <div className={compact ? "mb-1 grid grid-cols-7 gap-1 px-0.5" : "mb-2 grid grid-cols-7 gap-1.5 px-0.5"}>
         {WEEKDAY_HEADERS.map((label) => (
           <span
             key={label}
-            className="py-1 text-center text-[11px] font-semibold tracking-wide text-muted-foreground"
+            className={compact ? "py-0.5 text-center text-[9px] font-semibold tracking-wide text-muted-foreground" : "py-1 text-center text-[11px] font-semibold tracking-wide text-muted-foreground"}
           >
             {label}
           </span>
@@ -62,7 +64,7 @@ export function MonthCalendar({
       <div
         ref={gridRef}
         onKeyDown={handleKeyDown}
-        className="grid grid-cols-7 gap-1.5"
+        className={compact ? "grid grid-cols-7 gap-1" : "grid grid-cols-7 gap-1.5"}
       >
         {days.map((date) => (
           <CalendarDayCell
@@ -70,7 +72,9 @@ export function MonthCalendar({
             date={date}
             summary={summaries.get(date)}
             isToday={date === today}
+            isFuture={date > today}
             isOutsideMonth={!date.startsWith(`${monthKey}-`)}
+            compact={compact}
           />
         ))}
       </div>

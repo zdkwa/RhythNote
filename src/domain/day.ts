@@ -13,7 +13,7 @@ import {
 import { dateRange, timestampToDateKey } from "@/lib/date";
 import { expandOccurrences, nextOccurrence } from "@/lib/recurrence";
 
-export type CalendarState = "green" | "yellow" | "red" | "none";
+export type CalendarState = "green" | "yellow" | "red" | "none" | "upcoming";
 
 interface BuildOptions {
   tasks: Task[];
@@ -35,11 +35,53 @@ export function isTaskVisibleInActiveList(task: Task): boolean {
   return !task.archivedAt;
 }
 
+function timeToMinutes(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const match = /^(\d{2}):(\d{2})/.exec(value);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * 未完成且超过设置结束时间 30 分钟后，才视为逾期并允许补做。
+ * 没有设置结束时间的任务，到第二天才视为逾期。
+ */
+export function isTaskOverdue(
+  task: Task,
+  date: string,
+  done: boolean,
+  today: string,
+  nowTime: string,
+): boolean {
+  if (done || task.archivedAt) return false;
+  if (date < today) return true;
+  if (date > today) return false;
+  if (!task.endTime) return false;
+  const end = timeToMinutes(task.endTime);
+  const now = timeToMinutes(nowTime);
+  if (end === null || now === null) return false;
+  return now >= end + 30;
+}
+
 export function calendarStateFromSummary(summary: DaySummary): CalendarState {
   if (summary.total === 0) return "none";
   if (summary.done >= summary.total) return "green";
   if (summary.done <= 0) return "red";
   return "yellow";
+}
+
+/**
+ * 未来日期尚未开始，不能提前判为“未完成”。
+ * 有安排时返回 upcoming，无安排时仍为 none。
+ */
+export function calendarStateForDate(
+  summary: DaySummary,
+  date: string,
+  today: string,
+): CalendarState {
+  if (summary.total === 0) return "none";
+  if (date > today) return "upcoming";
+  return calendarStateFromSummary(summary);
 }
 
 export function buildCalendarSummaries({
@@ -73,6 +115,9 @@ export function buildCalendarSummaries({
 
   for (const task of tasks) {
     const archiveDate = archiveDateOf(task);
+    // 循环任务只从创建日之后开始判定；开始日期可以回填，但创建前不产生“未完成”。
+    const createdDate =
+      task.type === "recurring" ? timestampToDateKey(task.createdAt) : null;
     let dates: string[] = [];
     try {
       dates =
@@ -85,6 +130,7 @@ export function buildCalendarSummaries({
 
     for (const date of dates) {
       if (date < start || date > end) continue;
+      if (createdDate && date < createdDate) continue;
       const key = `${task.id}|${date}`;
       const record = recordsByKey.get(key) ?? null;
       const isArchived = Boolean(task.archivedAt);
