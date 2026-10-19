@@ -16,6 +16,27 @@ V1 功能实现完成：Tauri 2 工程、SQLite 迁移与 Repository、任务 CR
 | [RhythNote.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.0/RhythNote.exe) | 便携版，直接运行 |
 | [GitHub Release v0.1.0](https://github.com/zdkwa/RhythNote/releases/tag/v0.1.0) | 版本发布页与校验信息 |
 
+## Windows 运行要求
+
+RhythNote 使用 WebView2。**不要使用内置 Administrator 账户的高完整性令牌运行**，否则 WebView2 会在创建窗口时失败（应用会闪退，事件日志异常代码 `0xc0000409`）。
+
+如果当前账户是内置 Administrator，任选一种方式：
+
+1. 使用标准用户账户安装、运行；
+2. 开启 UAC 管理员批准模式后重启，再正常双击运行：
+
+```powershell
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v FilterAdministratorToken /t REG_DWORD /d 1 /f
+```
+
+重启后不要右键“以管理员身份运行”。
+
+如果启动失败，请查看：
+
+```text
+%TEMP%\RhythNote-crash.log
+```
+
 ## 功能
 
 - **首页月历**：固定 6×7 网格、周一开始、完成进度、四色状态、悬停提示、月份 URL 同步。
