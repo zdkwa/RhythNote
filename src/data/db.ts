@@ -23,6 +23,6 @@ export function resetDatabaseForTests(): void {
   databasePromise = null;
 }
 
-export async function getDatabasePathLabel(): Promise<string> {
+export function getDatabasePathLabel(): string {
   return "%APPDATA%\\com.rhythnote.desktop\\rhythnote.db";
 }

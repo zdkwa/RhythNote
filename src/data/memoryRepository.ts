@@ -17,6 +17,7 @@ import {
   todayKey,
   toMonthKey,
 } from "@/lib/date";
+import { expandOccurrences } from "@/lib/recurrence";
 
 const nowIso = () => new Date().toISOString();
 
@@ -451,6 +452,17 @@ export class MemoryRepository implements Repository {
   async updateTask(id: string, input: TaskInput): Promise<Task> {
     const task = this.tasks.find((item) => item.id === id && !item.archivedAt);
     if (!task) throw new Error("任务不存在或已归档");
+    if (task.type !== input.type) throw new Error("任务类型不可修改");
+    if (
+      task.type === "once" &&
+      task.completedAt &&
+      (task.taskDate !== input.taskDate ||
+        task.startTime !== (input.startTime || null) ||
+        task.endTime !== (input.endTime || null) ||
+        task.timeSemantic !== input.timeSemantic)
+    ) {
+      throw new Error("已完成的一次性任务需先取消完成才能修改日期或时间");
+    }
     const category = this.categories.find((c) => c.id === input.categoryId) ?? null;
     task.title = input.title.trim();
     task.description = input.description?.trim() || null;
@@ -484,9 +496,14 @@ export class MemoryRepository implements Repository {
     const task = this.tasks.find(
       (item) => item.id === id && !item.archivedAt && item.type === "once",
     );
-    if (!task) return;
+    if (!task) throw new Error("任务不存在、已归档或不是一次性任务");
+    const today = todayKey();
+    if (task.taskDate > today) throw new Error("未来日期不可完成");
+    if (completed && isBackfilled !== task.taskDate < today) {
+      throw new Error("补做标记与任务日期不一致");
+    }
     task.completedAt = completed ? nowIso() : null;
-    task.isBackfilled = completed && isBackfilled;
+    task.isBackfilled = completed && task.taskDate < today;
     task.updatedAt = nowIso();
   }
 
@@ -515,7 +532,35 @@ export class MemoryRepository implements Repository {
   }
 
   async upsertRecord(input: DailyRecordInput): Promise<DailyRecord> {
+    const task = this.tasks.find(
+      (item) => item.id === input.taskId && !item.archivedAt,
+    );
+    if (!task) throw new Error("任务不存在或已归档");
+    if (task.type !== "recurring") throw new Error("只有循环任务可以写每日记录");
+    const today = todayKey();
+    if (input.recordDate > today) throw new Error("未来日期不可打卡或写备注");
+    if (input.recordDate < task.taskDate) {
+      throw new Error("该日期早于循环任务开始日期");
+    }
+    let dates: string[] = [];
+    try {
+      dates = expandOccurrences(task, input.recordDate, input.recordDate);
+    } catch {
+      throw new Error("循环规则异常，无法写入该日期");
+    }
+    if (!dates.includes(input.recordDate)) {
+      throw new Error("该日期不是循环任务的发生日期");
+    }
+    if (
+      this.pauses.some(
+        (pause) =>
+          pause.taskId === input.taskId && pause.pauseDate === input.recordDate,
+      )
+    ) {
+      throw new Error("该日期已暂停，不能写入记录");
+    }
     const now = nowIso();
+    const isBackfilled = input.status === "done" && input.recordDate < today;
     const existing = this.records.find(
       (item) =>
         item.taskId === input.taskId && item.recordDate === input.recordDate,
@@ -523,7 +568,7 @@ export class MemoryRepository implements Repository {
     if (existing) {
       existing.status = input.status;
       existing.note = input.note?.trim() || null;
-      existing.isBackfilled = input.isBackfilled;
+      existing.isBackfilled = isBackfilled;
       existing.completedAt =
         input.status === "done" ? input.completedAt ?? now : null;
       existing.updatedAt = now;
@@ -535,7 +580,7 @@ export class MemoryRepository implements Repository {
       recordDate: input.recordDate,
       status: input.status,
       note: input.note?.trim() || null,
-      isBackfilled: input.isBackfilled,
+      isBackfilled,
       completedAt: input.status === "done" ? input.completedAt ?? now : null,
       createdAt: now,
       updatedAt: now,
@@ -545,6 +590,11 @@ export class MemoryRepository implements Repository {
   }
 
   async deleteRecord(taskId: string, recordDate: string): Promise<void> {
+    const task = this.tasks.find(
+      (item) => item.id === taskId && !item.archivedAt,
+    );
+    if (!task) throw new Error("任务不存在或已归档");
+    if (recordDate > todayKey()) throw new Error("未来日期没有可删除的记录");
     this.records = this.records.filter(
       (record) => !(record.taskId === taskId && record.recordDate === recordDate),
     );
@@ -557,6 +607,21 @@ export class MemoryRepository implements Repository {
   }
 
   async addPause(taskId: string, pauseDate: string): Promise<void> {
+    const task = this.tasks.find(
+      (item) => item.id === taskId && !item.archivedAt,
+    );
+    if (!task) throw new Error("任务不存在或已归档");
+    if (task.type !== "recurring") throw new Error("只有循环任务可以暂停某一天");
+    if (pauseDate < todayKey()) throw new Error("不能暂停过去的日期");
+    let dates: string[] = [];
+    try {
+      dates = expandOccurrences(task, pauseDate, pauseDate);
+    } catch {
+      throw new Error("循环规则异常，无法暂停该日期");
+    }
+    if (!dates.includes(pauseDate)) {
+      throw new Error("该日期不是循环任务的发生日期");
+    }
     if (
       this.records.some(
         (record) => record.taskId === taskId && record.recordDate === pauseDate,

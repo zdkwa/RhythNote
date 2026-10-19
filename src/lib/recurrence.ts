@@ -12,6 +12,7 @@ export interface RuleBuilderState {
   interval: number;
   byWeekday: string[];
   monthDay: number;
+  baseDate?: string;
   endType: RuleEndType;
   untilDate: string;
   count: number;
@@ -21,14 +22,22 @@ export interface ParsedRuleSummary {
   freq: RuleFrequency;
   interval: number;
   byWeekday: string[];
+  byWeekdayOrdinals: Array<{ code: string; n: number | null }>;
   monthDay: number | null;
   month: number | null;
+  bySetPos: number | null;
   endType: RuleEndType;
   until: Date | null;
   count: number | null;
 }
 
 const WEEKDAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
+const FREQ_BY_NUMBER: Record<number, RuleFrequency> = {
+  0: "YEARLY",
+  1: "MONTHLY",
+  2: "WEEKLY",
+  3: "DAILY",
+};
 const WEEKDAY_LABELS: Record<string, string> = {
   MO: "周一",
   TU: "周二",
@@ -52,14 +61,26 @@ export const FREQUENCY_LABELS: Record<RuleFrequency, string> = {
   YEARLY: "每年",
 };
 
-function weekdayCode(value: ByWeekday | number | string): string {
+function weekdayInfo(value: ByWeekday | number | string): {
+  code: string;
+  n: number | null;
+} {
   if (typeof value === "string") {
-    return value.slice(0, 2).toUpperCase();
+    const match = value.toUpperCase().match(/([A-Z]{2})$/);
+    return { code: match?.[1] ?? "MO", n: null };
   }
   if (typeof value === "number") {
-    return WEEKDAY_CODES[value] ?? "MO";
+    return { code: WEEKDAY_CODES[value] ?? "MO", n: null };
   }
-  return String(value).slice(0, 2).toUpperCase();
+  const weekday = value as { weekday?: number; n?: number };
+  const code =
+    typeof weekday.weekday === "number"
+      ? (WEEKDAY_CODES[weekday.weekday] ?? "MO")
+      : "MO";
+  return {
+    code,
+    n: typeof weekday.n === "number" ? weekday.n : null,
+  };
 }
 
 export function parseRule(rule: string): Options {
@@ -69,10 +90,17 @@ export function parseRule(rule: string): Options {
   if (/DTSTART|RDATE|EXDATE|TZID/i.test(rule)) {
     throw new Error("循环规则不能包含 DTSTART、RDATE、EXDATE 或 TZID");
   }
-  const normalized = rule.replace(/^RRULE:/i, "").trim();
+  const normalized = (
+    rule
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => /^RRULE:/i.test(line) || /^FREQ=/i.test(line)) ?? rule
+  )
+    .replace(/^RRULE:/i, "")
+    .trim();
   try {
     const options = RRule.parseString(normalized) as Options;
-    if (!options.freq) throw new Error("缺少 FREQ");
+    if (options.freq == null) throw new Error("缺少 FREQ");
     return options;
   } catch (error) {
     throw new Error(
@@ -82,6 +110,9 @@ export function parseRule(rule: string): Options {
 }
 
 export function canonicalizeRule(rule: string): string {
+  if (/DTSTART|RDATE|EXDATE|TZID/i.test(rule)) {
+    throw new Error("循环规则不能包含 DTSTART、RDATE、EXDATE 或 TZID");
+  }
   const body = rule
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -129,7 +160,9 @@ export function buildRecurrenceRule(state: RuleBuilderState): string {
   }
 
   if (state.freq === "YEARLY") {
-    const base = parseDateKey(state.untilDate || format(new Date(), "yyyy-MM-dd"));
+    const base = parseDateKey(
+      state.baseDate || format(new Date(), "yyyy-MM-dd"),
+    );
     parts.push(`BYMONTH=${base.getMonth() + 1}`);
     parts.push(`BYMONTHDAY=${base.getDate()}`);
   }
@@ -139,9 +172,11 @@ export function buildRecurrenceRule(state: RuleBuilderState): string {
   } else if (state.endType === "until" && state.untilDate) {
     const until = parse(state.untilDate, "yyyy-MM-dd", new Date());
     until.setHours(23, 59, 59, 999);
-    parts.push(
-      `UNTIL=${format(until, "yyyyMMdd'T'HHmmss'Z'", { locale: zhCN })}`,
-    );
+    const utc = until
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}Z$/, "Z");
+    parts.push(`UNTIL=${utc}`);
   }
 
   const rule = parts.join(";");
@@ -152,11 +187,13 @@ export function buildRecurrenceRule(state: RuleBuilderState): string {
 export function parseRuleSummary(rule: string): ParsedRuleSummary | null {
   try {
     const options = parseRule(rule);
-    const freq = options.freq as unknown as RuleFrequency;
+    const freq = FREQ_BY_NUMBER[options.freq as number];
+    if (!freq) throw new Error("不支持的循环频率");
     const interval = options.interval ?? 1;
-    const byWeekday = Array.isArray(options.byweekday)
-      ? options.byweekday.map((d) => weekdayCode(d))
+    const byWeekdayInfo = Array.isArray(options.byweekday)
+      ? options.byweekday.map((d) => weekdayInfo(d))
       : [];
+    const byWeekday = byWeekdayInfo.map((item) => item.code);
     const byMonthDay = options.bymonthday;
     const monthDay = Array.isArray(byMonthDay)
       ? Number(byMonthDay[0])
@@ -169,13 +206,21 @@ export function parseRuleSummary(rule: string): ParsedRuleSummary | null {
       : typeof byMonth === "number"
         ? byMonth
         : null;
+    const rawSetPos = options.bysetpos;
+    const bySetPos = Array.isArray(rawSetPos)
+      ? Number(rawSetPos[0])
+      : typeof rawSetPos === "number"
+        ? rawSetPos
+        : null;
     return {
       freq,
       interval,
       byWeekday,
+      byWeekdayOrdinals: byWeekdayInfo,
       monthDay,
       month,
-      endType: options.count ? "count" : options.until ? "until" : "never",
+      bySetPos,
+      endType: options.count != null ? "count" : options.until ? "until" : "never",
       until: options.until ?? null,
       count: options.count ?? null,
     };
@@ -188,23 +233,33 @@ export function describeRecurrence(rule: string | null): string {
   if (!rule) return "未设置循环";
   const summary = parseRuleSummary(rule);
   if (!summary) return "循环规则异常";
-  const { freq, interval, byWeekday, monthDay, month } = summary;
-  const every = interval > 1 ? `每 ${interval} ` : "每";
+  const { freq, interval, byWeekday, byWeekdayOrdinals, monthDay, month } =
+    summary;
   let text = "";
 
   if (freq === "DAILY") {
-    text = interval > 1 ? `${every}天` : "每天";
+    text = interval > 1 ? `每 ${interval} 天` : "每天";
   } else if (freq === "WEEKLY") {
+    const prefix = interval > 1 ? `每 ${interval} 周` : "每周";
     const days = byWeekday
-      .map((d) => WEEKDAY_LABELS[d] ?? d)
+      .map((d) => (WEEKDAY_LABELS[d] ?? d).replace(/^周/, ""))
       .join("、");
-    text = days
-      ? `${interval > 1 ? `每 ${interval} 周` : "每周"}${days}`
-      : `${interval > 1 ? `每 ${interval} 周` : "每周"}`;
+    text = days ? `${prefix}${days}` : prefix;
   } else if (freq === "MONTHLY") {
-    text = `${interval > 1 ? `每 ${interval} 个月` : "每月"}${monthDay ?? ""} 日`;
+    const prefix = interval > 1 ? `每 ${interval} 个月` : "每月";
+    const ordinal = byWeekdayOrdinals.find((item) => item.n != null);
+    if (monthDay != null) {
+      text = `${prefix} ${monthDay} 日`;
+    } else if (ordinal?.n) {
+      text = `${prefix}第 ${ordinal.n} 个${WEEKDAY_LABELS[ordinal.code] ?? ordinal.code}`;
+    } else {
+      text = prefix;
+    }
   } else {
-    text = `${interval > 1 ? `每 ${interval} 年` : "每年"}${month ?? ""} 月 ${monthDay ?? ""} 日`;
+    const prefix = interval > 1 ? `每 ${interval} 年` : "每年";
+    const monthPart = month ? ` ${month} 月` : "";
+    const dayPart = monthDay ? ` ${monthDay} 日` : "";
+    text = `${prefix}${monthPart}${dayPart}`;
   }
 
   if (summary.endType === "count" && summary.count) {

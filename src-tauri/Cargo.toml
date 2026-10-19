@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "RhythNote — local-first personal task and rhythm app"
 authors = ["RhythNote"]
 edition = "2021"
+default-run = "rhythnote"
 
 [lib]
 name = "rhythnote_lib"

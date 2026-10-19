@@ -12,8 +12,9 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useCategories, useTasks } from "@/data/queries";
 import { usingMemoryDatabase } from "@/data";
 import { useTheme } from "@/hooks/useTheme";
+import { useToday } from "@/hooks/useToday";
 import { cn } from "@/lib/utils";
-import { todayKey, dateWithWeekday } from "@/lib/date";
+import { dateWithWeekday } from "@/lib/date";
 
 function BrandMark() {
   return (
@@ -64,6 +65,7 @@ export function Sidebar() {
   const { data: categories = [] } = useCategories();
   const { data: tasks = [] } = useTasks(false);
   const { theme, resolved, setTheme } = useTheme();
+  const today = useToday();
   const location = useLocation();
   const isHome = location.pathname === "/" || location.pathname.startsWith("/day/");
 
@@ -96,7 +98,7 @@ export function Sidebar() {
           今天
         </p>
         <p className="mt-1 text-[13px] font-medium text-[hsl(var(--sidebar-foreground))]">
-          {dateWithWeekday(todayKey())}
+          {dateWithWeekday(today)}
         </p>
       </div>
 

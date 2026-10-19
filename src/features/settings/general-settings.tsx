@@ -40,7 +40,9 @@ export function GeneralSettings() {
             <div className="flex items-start justify-between gap-3 border-t border-border/70 pt-2">
               <dt className="shrink-0 text-muted-foreground">路径</dt>
               <dd className="break-all text-right font-mono text-[11px] text-foreground">
-                {getDatabasePathLabel()}
+                {usingMemoryDatabase
+                  ? "浏览器预览不写 SQLite"
+                  : getDatabasePathLabel()}
               </dd>
             </div>
           </dl>
