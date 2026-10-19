@@ -2,79 +2,97 @@
 
 > 用规则描述重复，用记录保存事实。一个本地优先的个人任务待办 Windows 桌面应用。
 
+RhythNote 把「循环任务」和「每日记录」分开：任务只描述应该发生什么，只有真正打卡、写备注、补做时才写入每日记录。月历不会预生成任何实例，也不会把过去和未来混成一团。
+
 ![RhythNote 首页仪表板](docs/screenshots/home.png)
 
-## 项目状态
+## 当前版本
 
-V1.1 体验修订完成：Tauri 2 工程、SQLite 迁移与 Repository、任务 CRUD、循环规则构建器、首页仪表板、紧凑月历、日期详情、每日记录、备注、补做、按日暂停、筛选、归档与设置均已落地，并通过 `typecheck`、单元测试、Vite 构建与 Tauri NSIS 打包验证。
-
-## 下载
+`v0.1.1` · Windows 10/11 x64
 
 | 文件 | 说明 |
 |---|---|
-| [RhythNote_0.1.1_x64-setup.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.1/RhythNote_0.1.1_x64-setup.exe) | Windows x64 NSIS 安装包，推荐 |
+| [RhythNote_0.1.1_x64-setup.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.1/RhythNote_0.1.1_x64-setup.exe) | NSIS 安装包，推荐 |
 | [RhythNote.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.1/RhythNote.exe) | 便携版，直接运行 |
-| [GitHub Release v0.1.1](https://github.com/zdkwa/RhythNote/releases/tag/v0.1.1) | 版本发布页与校验信息 |
+| [GitHub Release](https://github.com/zdkwa/RhythNote/releases/tag/v0.1.1) | 版本发布页与 SHA256 |
 
-## Windows 运行要求
+安装包未做代码签名。Windows SmartScreen 提示时，选择「更多信息 → 仍要运行」。
 
-RhythNote 使用 WebView2。**不要使用内置 Administrator 账户的高完整性令牌运行**，否则 WebView2 会在创建窗口时失败（应用会闪退，事件日志异常代码 `0xc0000409`）。
+## 界面预览
 
-如果当前账户是内置 Administrator，任选一种方式：
-
-1. 使用标准用户账户安装、运行；
-2. 开启 UAC 管理员批准模式后重启，再正常双击运行：
-
-```powershell
-reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v FilterAdministratorToken /t REG_DWORD /d 1 /f
-```
-
-重启后不要右键“以管理员身份运行”。
-
-如果启动失败，请查看：
-
-```text
-%TEMP%\RhythNote-crash.log
-```
+| 首页仪表板 | 日期详情 |
+|---|---|
+| ![首页仪表板](docs/screenshots/home.png) | ![日期详情](docs/screenshots/day.png) |
+| **全部任务** | **新建 / 编辑任务** |
+| ![全部任务](docs/screenshots/tasks.png) | ![新建任务](docs/screenshots/editor.png) |
 
 ## 功能
 
-- **首页仪表板**：顶部今日日期与实时时钟，今日完成/待完成/当前时段/进度环，正在进行的循环任务、未完成临时任务与紧凑月历同屏。
-- **当前时段统计**：统计当前时间段内的循环任务和临时任务；首页“正在做”只展开循环任务，临时任务仍按规则显示在临时任务列表。
-- **临时任务排序**：当前时间段优先 → 高/中/低优先级 → 开始时间；只展示前 5 项，超出可进入全部临时任务。
-- **未来未开始**：未来日期只显示计划数量，不再渲染成“未完成”；只有当天及过去才计算完成状态。
-- **创建日之前不判定**：循环任务只从创建当天开始产生完成/未完成状态；即使开始日期回填到更早，也不会把创建前的日期标红。
-- **逾期宽限**：超过任务结束时间 30 分钟后才显示“逾期/补做”；没有设置结束时间的任务，到第二天才显示“补做”。
-- **完成按钮**：统一放在任务行右侧，按状态显示绿色“完成”、橙色“补做”、红色“取消完成”；循环任务不显示优先级。
-- **日期详情**：未完成 / 已完成 / 已暂停 / 历史记录分区；当天完成、过去补做、未来只读。
-- **任务定义**：临时任务可设优先级；循环任务不显示优先级，优先级固定为中。
-- **循环规则**：每天、工作日、每周多选、每月、每年；间隔与结束条件折叠为“更多循环设置”，不向普通用户暴露高级 RRULE。
-- **统一新建入口**：侧栏“新建任务”按钮 + `Ctrl N`；分类/任务类型页会自动带入上下文，不再在每个页面重复放新建按钮。
-- **每日备注**：循环任务卡片下方内联编辑，500ms 防抖 + 失焦保存，失败可重试。
-- **按日暂停**：只暂停具体某一天，不修改 RRULE，不写每日记录。
-- **归档**：隐藏任务、停止新记录、保留历史；V1 单向不可恢复。
-- **分类 / 标签 / 主题**：预置分类可增删改，标签自由创建，浅色/深色/跟随系统。
-- **完全本地**：无账号、无网络请求、无遥测。
+### 首页仪表板
+
+- 顶部显示今天日期、星期和实时时钟，精确到秒。
+- 今日完成、待完成、当前时段、今日进度环。
+- 「正在做」只展示当前时间段的循环任务。
+- 未完成临时任务按「当前时段优先 → 优先级 → 时间」排序，最多展示 5 项。
+- 月历压缩在右侧，不再独占整页。
+
+### 月历与日期
+
+- 固定 6×7 月历，周一开始，支持月份 URL 同步。
+- 未来日期显示「未开始」，不再显示 0/N 或提前标红。
+- 循环任务从创建当天开始判定；创建之前不产生未完成状态。
+- 日期详情按未完成 / 已完成 / 已暂停 / 历史记录分区。
+- 点击日期进入当天安排，月历只读，不生成每日记录。
+
+### 任务与循环
+
+- 临时任务可设置优先级、计划时间段或截止时间。
+- 循环任务不显示优先级，固定为中优先级。
+- 常用循环节奏：每天、工作日、每周多选、每月、每年。
+- 间隔与结束条件折叠在「更多循环设置」中。
+- 普通用户界面不提供高级 RRULE 字符串编辑。
+- 侧栏「新建任务」和 `Ctrl N` 是唯一全局新建入口。
+
+### 完成、补做与逾期
+
+- 完成按钮统一在任务行右侧。
+- 绿色「完成」、橙色「补做」、红色「取消完成」。
+- 当天任务超过结束时间 30 分钟后才判定逾期并显示「补做」。
+- 没有设置结束时间的任务，到第二天才显示「补做」。
+- 过去日期完成会记为补做。
+
+### 记录与归档
+
+- 循环任务卡片支持内联备注，500ms 防抖 + 失焦保存。
+- 按日暂停：只暂停某一天，不修改 RRULE，不写每日记录。
+- 归档任务停止产生新记录并保留历史；V1 归档不可恢复。
+- 支持分类、标签、浅色 / 深色 / 跟随系统。
+
+### 完全本地
+
+- 无账号、无网络请求、无遥测。
+- 数据保存在本机 SQLite。
+- 浏览器预览使用内存演示数据，不会写入桌面数据库。
 
 ## 技术栈
 
-- 桌面：Tauri 2 + Rust
-- 前端：React 18 + TypeScript + Vite
-- 样式：Tailwind CSS 3.4 + shadcn/ui 风格组件
-- 数据：SQLite（tauri-plugin-sql）
-- 循环：rrule
-- 日期：date-fns
-- 状态：TanStack Query
+| 层级 | 技术 |
+|---|---|
+| 桌面 | Tauri 2 + Rust |
+| 前端 | React 18 + TypeScript + Vite |
+| 样式 | Tailwind CSS 3.4 + shadcn/ui 风格组件 |
+| 数据 | SQLite（tauri-plugin-sql） |
+| 循环 | rrule |
+| 日期 | date-fns |
+| 状态 | TanStack Query |
 
 ## 核心设计
 
 - **规则与记录分离**：循环任务只保存定义与 RRULE，发生实例运行时展开，绝不预生成。
-- **稀疏每日记录**：只有打卡、备注、补做等用户交互才写 `daily_records`。
-- **按日暂停**：暂停必须绑定具体日期，不支持无限期暂停。
-- **归档只读**：归档隐藏任务并停止新记录，历史记录与备注永久保留。
+- **稀疏每日记录**：只有打卡、备注、补做、暂停等用户交互才写 `daily_records` / `task_pauses`。
+- **未来未开始**：未来日期只表达计划，不表达完成或失败。
+- **创建日判定**：循环任务创建前的日期不参与完成统计。
 - **本地日期**：业务日期统一 `YYYY-MM-DD`，审计时间戳使用 UTC。
-
-完整产品需求与技术规格见 [RhythNote-节律待办-PRD.md](RhythNote-节律待办-PRD.md)。
 
 ## 开发
 
@@ -82,19 +100,31 @@ reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v Filt
 
 ```bash
 pnpm install
-pnpm dev            # 浏览器预览（使用内存演示数据）
+pnpm dev            # 浏览器预览（内存演示数据）
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm tauri dev      # 桌面开发模式（使用本地 SQLite）
+pnpm tauri dev      # 桌面开发模式（本地 SQLite）
 pnpm tauri build    # 生成 Windows NSIS 安装包
 ```
 
-SQLite 数据库由 tauri-plugin-sql 放在应用配置目录，Windows 下通常为：
+### 数据位置
 
 ```text
 %APPDATA%\com.rhythnote.desktop\rhythnote.db
 ```
+
+卸载应用不会自动删除该数据库；如需彻底清理，请手动删除该目录。
+
+### Windows 运行要求
+
+请使用标准用户运行，或对内置 Administrator 开启 UAC 管理员批准模式后重启。不要使用高完整性管理员令牌直接运行，否则 WebView2 可能创建窗口失败（闪退，异常代码 `0xc0000409`）。
+
+```powershell
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v FilterAdministratorToken /t REG_DWORD /d 1 /f
+```
+
+若启动失败，请查看 `%TEMP%\RhythNote-crash.log`。
 
 ## 目录
 
@@ -103,7 +133,7 @@ src/
   app/          # 路由、QueryClient、错误边界
   components/   # 布局与 shadcn 风格 UI
   data/         # SQLite 客户端、Repository、查询 hooks
-  domain/       # 循环展开、状态合并、排序
+  domain/       # 循环展开、状态合并、排序、逾期判定
   features/     # 日历、任务、记录、设置
   hooks/        # 今天、时钟、主题
   lib/          # 日期、RRULE、工具
@@ -116,11 +146,27 @@ docs/
   screenshots/  # 界面截图
 ```
 
-## 截图
+## 验证
 
-| 日期详情 | 循环规则编辑器 |
-|---|---|
-| ![日期详情](docs/screenshots/day.png) | ![循环规则编辑器](docs/screenshots/editor.png) |
+- `pnpm typecheck`：通过
+- `pnpm test`：22 个测试通过
+- `pnpm tauri build`：成功生成 NSIS 安装包
+
+## 版本记录
+
+### 0.1.1
+
+- 首页改为仪表板，增加顶部日期、实时时钟和紧凑月历。
+- 未来日期改为「未开始」，循环任务从创建日开始判定。
+- 完成按钮统一右侧，增加绿 / 橙 / 红三态。
+- 逾期改为结束时间 30 分钟后；无时间任务次日补做。
+- 未完成临时任务按当前时段、优先级、时间排序，最多 5 项。
+- 简化新建任务，移除高级 RRULE，循环任务隐藏优先级。
+- 统一侧栏新建入口，移除各页面重复的新建按钮。
+
+### 0.1.0
+
+- V1 本地优先任务待办基线版本。
 
 ## License
 
