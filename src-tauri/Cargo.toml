@@ -1,6 +1,6 @@
 [package]
 name = "rhythnote"
-version = "0.1.1"
+version = "0.1.2"
 description = "RhythNote — local-first personal task and rhythm app"
 authors = ["RhythNote"]
 edition = "2021"

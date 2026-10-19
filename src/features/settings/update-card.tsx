@@ -18,7 +18,7 @@ import {
 } from "@/lib/update-check";
 
 const TOKEN_STORAGE_KEY = "rhythnote.github-update-token";
-const FALLBACK_VERSION = "0.1.1";
+const FALLBACK_VERSION = "0.1.2";
 
 function readStoredToken(): string {
   try {
