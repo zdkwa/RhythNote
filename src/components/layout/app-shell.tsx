@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "@/components/layout/sidebar";
+import { QuickCreate } from "@/components/layout/quick-create";
 
 export function AppShell() {
   return (
@@ -10,6 +11,7 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
+      <QuickCreate />
     </div>
   );
 }

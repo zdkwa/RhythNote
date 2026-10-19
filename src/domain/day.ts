@@ -88,9 +88,11 @@ export function buildCalendarSummaries({
       const key = `${task.id}|${date}`;
       const record = recordsByKey.get(key) ?? null;
       const isArchived = Boolean(task.archivedAt);
+      const keepOnArchiveDay =
+        task.type === "once" ? Boolean(task.completedAt) : Boolean(record);
       if (
         archiveDate &&
-        (date > archiveDate || (date === archiveDate && !record))
+        (date > archiveDate || (date === archiveDate && !keepOnArchiveDay))
       ) {
         continue;
       }
@@ -326,7 +328,8 @@ export function buildTaskWithStatus(
   let next: string | null = null;
   if (task.type === "recurring") {
     try {
-      next = nextOccurrence(task, today);
+      // 定义卡展示“下次发生”，不重复展示今天这一次。
+      next = nextOccurrence(task, today, false);
     } catch {
       next = null;
     }

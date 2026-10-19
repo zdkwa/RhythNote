@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "@/components/layout/app-shell";
 import { HomePage } from "@/pages/home-page";
-import { DayPage } from "@/pages/day-page";
+import { DayRoute } from "@/pages/day-route";
 import { TasksPage } from "@/pages/tasks-page";
 import { SettingsPage } from "@/pages/settings-page";
 import { NotFoundPage } from "@/pages/not-found-page";
@@ -22,7 +22,7 @@ export default function App() {
               <Routes>
                 <Route element={<AppShell />}>
                   <Route index element={<HomePage />} />
-                  <Route path="day/:date" element={<DayPage />} />
+                  <Route path="day/:date" element={<DayRoute />} />
                   <Route path="tasks" element={<TasksPage />} />
                   <Route path="tasks/once" element={<TasksPage fixedType="once" />} />
                   <Route

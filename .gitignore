@@ -16,8 +16,13 @@ dist-ssr
 src-tauri/target
 src-tauri/gen
 
-# Local diagnostics
+# Local diagnostics and UI smoke artifacts
 .acl-recovery/
+.appdata/
+scripts-*.py
+ui-*.png
+launch-rhythnote.cmd
+probe-rust.txt
 /RhythNote节律待办
 
 # Editor directories and files
