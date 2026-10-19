@@ -8,6 +8,14 @@
 
 V1 功能实现完成：Tauri 2 工程、SQLite 迁移与 Repository、任务 CRUD、循环规则构建器、月历、日期详情、每日记录、备注、补做、按日暂停、筛选、归档与设置均已落地，并通过 `typecheck`、单元测试、Vite 构建与 Tauri NSIS 打包验证。
 
+## 下载
+
+| 文件 | 说明 |
+|---|---|
+| [RhythNote_0.1.0_x64-setup.exe](release/RhythNote_0.1.0_x64-setup.exe) | Windows x64 NSIS 安装包，推荐 |
+| [RhythNote.exe](release/RhythNote.exe) | 便携版，直接运行 |
+| [发布说明](release/README.md) | 版本、SHA256 与数据位置 |
+
 ## 功能
 
 - **首页月历**：固定 6×7 网格、周一开始、完成进度、四色状态、悬停提示、月份 URL 同步。
