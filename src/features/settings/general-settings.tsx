@@ -4,6 +4,7 @@ import { getDatabasePathLabel } from "@/data/db";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ThemeCard } from "@/features/settings/theme-card";
+import { UpdateCard } from "@/features/settings/update-card";
 
 export function GeneralSettings() {
   return (
@@ -14,6 +15,7 @@ export function GeneralSettings() {
         description="外观与本地数据。RhythNote 不需要账号，也不会把任务发送到网络。"
       />
       <ThemeCard />
+      <UpdateCard />
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="paper-panel rounded-2xl p-5">
