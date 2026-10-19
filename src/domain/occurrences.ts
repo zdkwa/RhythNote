@@ -4,7 +4,11 @@ import type {
   Task,
   TaskPause,
 } from "@/types/domain";
-import { addDaysKey, nowTimeKey } from "@/lib/date";
+import {
+  addDaysKey,
+  nowTimeKey,
+  timestampToDateKey,
+} from "@/lib/date";
 import { expandOccurrences } from "@/lib/recurrence";
 
 interface CollectInput {
@@ -52,7 +56,9 @@ export function collectOccurrences({
     } catch {
       continue;
     }
+    const createdDate = timestampToDateKey(task.createdAt);
     for (const date of dates) {
+      if (date < createdDate) continue;
       const key = `${task.id}|${date}`;
       const record = recordsByKey.get(key) ?? null;
       items.push({

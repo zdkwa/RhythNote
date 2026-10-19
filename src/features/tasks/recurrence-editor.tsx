@@ -1,11 +1,8 @@
-﻿import { Repeat2 } from "lucide-react";
+import { Repeat2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
-  FREQUENCY_LABELS,
-  parseRuleSummary,
   WEEKDAY_OPTIONS,
   type RuleBuilderState,
   type RuleEndType,
@@ -13,13 +10,9 @@ import {
 } from "@/lib/recurrence";
 import { isValidDateKey, parseDateKey } from "@/lib/date";
 import {
-  ALLOWED_RULE_KEYS,
   buildRuleFromState,
-  builderCanRepresent,
   effectiveRule,
   formatRuleSummary,
-  normalizeRule,
-  stateFromRuleInfo,
   validateRuleText,
   weekdayCodeForDate,
   type RuleEditorValue,
@@ -55,10 +48,6 @@ const END_OPTIONS: Array<{ value: RuleEndType; label: string }> = [
   { value: "until", label: "到某日期" },
   { value: "count", label: "共 N 次" },
 ];
-
-const FREQ_OPTIONS: Array<{ value: RuleFrequency; label: string }> = (
-  ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"] as RuleFrequency[]
-).map((freq) => ({ value: freq, label: FREQUENCY_LABELS[freq] }));
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -136,7 +125,7 @@ export function RecurrenceEditor({
     try {
       candidate = value.advanced
         ? value.advancedRule.trim()
-          ? normalizeRule(value.advancedRule)
+          ? value.advancedRule
           : null
         : buildRuleFromState(state, taskDate);
     } catch (cause) {
@@ -149,7 +138,12 @@ export function RecurrenceEditor({
   const displayError = error ?? liveError;
 
   const updateState = (patch: Partial<RuleBuilderState>) => {
-    onChange({ ...value, state: { ...state, ...patch } });
+    onChange({
+      ...value,
+      advanced: false,
+      advancedRule: "",
+      state: { ...state, ...patch },
+    });
   };
 
   const toggleWeekday = (code: string) => {
@@ -159,25 +153,6 @@ export function RecurrenceEditor({
       byWeekday: selected
         ? state.byWeekday.filter((item) => item !== code)
         : [...state.byWeekday, code],
-    });
-  };
-
-  const handleAdvancedToggle = (next: boolean) => {
-    if (next) {
-      onChange({
-        ...value,
-        advanced: true,
-        advancedRule: effectiveRule(value, taskDate) ?? "",
-      });
-      return;
-    }
-    if (!builderCanRepresent(value.advancedRule, taskDate)) return;
-    const info = parseRuleSummary(value.advancedRule);
-    if (!info) return;
-    onChange({
-      state: stateFromRuleInfo(info, taskDate),
-      advanced: false,
-      advancedRule: "",
     });
   };
 
@@ -195,51 +170,18 @@ export function RecurrenceEditor({
           <div>
             <h3 className="text-sm font-semibold">循环规则</h3>
             <p className="text-[11px] text-muted-foreground">
-              周一开始，不显示英文 RRULE 文案
+              选择常用节奏即可，后续可以修改
             </p>
           </div>
         </div>
-        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          高级 RRULE
-          <Switch
-            checked={value.advanced}
-            onCheckedChange={handleAdvancedToggle}
-            aria-label="切换高级 RRULE 模式"
-          />
-        </label>
       </header>
 
-      {value.advanced ? (
-        <div className="space-y-2">
-          <Input
-            value={value.advancedRule}
-            onChange={(event) =>
-              onChange({ ...value, advancedRule: event.target.value })
-            }
-            onBlur={() => {
-              try {
-                onChange({
-                  ...value,
-                  advancedRule: normalizeRule(value.advancedRule),
-                });
-              } catch {
-                // 保留原文，错误在下方即时展示，保存时会被拦截。
-              }
-            }}
-            placeholder="FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE,FR;WKST=MO"
-            aria-label="高级 RRULE 字符串"
-            className="font-mono text-xs"
-          />
-          <p className="text-[11px] leading-5 text-muted-foreground">
-            允许字段：{ALLOWED_RULE_KEYS.join("、")}；不能包含 DTSTART、RDATE、EXDATE、TZID；
-            COUNT 与 UNTIL 互斥，COUNT 最大 1,000，INTERVAL 最大 99。
-          </p>
-          <p className="text-[11px] leading-5 text-muted-foreground">
-            例如 FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2 表示每月第二个周二。
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
+      <div className="space-y-4">
+          {value.advanced ? (
+            <p className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+              当前任务使用了更复杂的自定义循环规则。保存时会保留原规则；选择下方常用节奏会替换它。
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-1.5">
             {PRESETS.map((item) => (
               <button
@@ -259,54 +201,6 @@ export function RecurrenceEditor({
                 {item.label}
               </button>
             ))}
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-muted-foreground">频率</p>
-              <Segmented
-                ariaLabel="循环频率"
-                value={state.freq}
-                options={FREQ_OPTIONS}
-                onChange={(freq) => {
-                  if (freq === "WEEKLY" && state.byWeekday.length === 0) {
-                    updateState({
-                      freq,
-                      byWeekday: [weekdayCodeForDate(taskDate)],
-                    });
-                    return;
-                  }
-                  updateState({ freq });
-                }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                间隔（1–99）
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">每</span>
-                <Input
-                  type="number"
-                  min={1}
-                  max={99}
-                  value={state.interval}
-                  onChange={(event) => {
-                    const next = Number(event.target.value);
-                    updateState({
-                      interval: Number.isFinite(next)
-                        ? Math.min(99, Math.max(1, Math.round(next)))
-                        : 1,
-                    });
-                  }}
-                  aria-label="循环间隔"
-                  className="h-9 w-20"
-                />
-                <span className="text-xs text-muted-foreground">
-                  {FREQ_UNIT[state.freq]}
-                </span>
-              </div>
-            </div>
           </div>
 
           {state.freq === "WEEKLY" ? (
@@ -371,69 +265,99 @@ export function RecurrenceEditor({
             </p>
           ) : null}
 
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[11px] font-medium text-muted-foreground">结束</p>
-              <Segmented
-                ariaLabel="循环结束方式"
-                value={state.endType}
-                options={END_OPTIONS}
-                onChange={(endType) => updateState({ endType })}
-              />
+          <details className="rounded-lg border border-border/70 bg-muted/25 px-3 py-2">
+            <summary className="cursor-pointer list-none text-[11px] font-medium text-muted-foreground hover:text-foreground">
+              更多循环设置（间隔、结束条件）
+            </summary>
+            <div className="mt-3 space-y-4">
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  间隔（1–99）
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">每</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={state.interval}
+                    onChange={(event) => {
+                      const next = Number(event.target.value);
+                      updateState({
+                        interval: Number.isFinite(next)
+                          ? Math.min(99, Math.max(1, Math.round(next)))
+                          : 1,
+                      });
+                    }}
+                    aria-label="循环间隔"
+                    className="h-9 w-20"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {FREQ_UNIT[state.freq]}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    结束
+                  </p>
+                  <Segmented
+                    ariaLabel="循环结束方式"
+                    value={state.endType}
+                    options={END_OPTIONS}
+                    onChange={(endType) => updateState({ endType })}
+                  />
+                </div>
+                {state.endType === "until" ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      type="date"
+                      value={state.untilDate}
+                      onChange={(event) =>
+                        updateState({ untilDate: event.target.value })
+                      }
+                      aria-label="循环结束日期"
+                      className="h-9 w-44"
+                    />
+                    <span className="text-[11px] text-muted-foreground">
+                      结束日当天仍会发生；必须晚于开始日期。
+                    </span>
+                  </div>
+                ) : null}
+                {state.endType === "count" ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={state.count}
+                      onChange={(event) => {
+                        const next = Number(event.target.value);
+                        updateState({
+                          count: Number.isFinite(next)
+                            ? Math.min(1000, Math.max(1, Math.round(next)))
+                            : 1,
+                        });
+                      }}
+                      aria-label="循环次数"
+                      className="h-9 w-24"
+                    />
+                    <span className="text-[11px] text-muted-foreground">
+                      次（1–1,000，从开始日期算起）
+                    </span>
+                  </div>
+                ) : null}
+              </div>
             </div>
-            {state.endType === "until" ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  type="date"
-                  value={state.untilDate}
-                  onChange={(event) =>
-                    updateState({ untilDate: event.target.value })
-                  }
-                  aria-label="循环结束日期"
-                  className="h-9 w-44"
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  结束日当天仍会发生；必须晚于开始日期。
-                </span>
-              </div>
-            ) : null}
-            {state.endType === "count" ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  type="number"
-                  min={1}
-                  max={1000}
-                  value={state.count}
-                  onChange={(event) => {
-                    const next = Number(event.target.value);
-                    updateState({
-                      count: Number.isFinite(next)
-                        ? Math.min(1000, Math.max(1, Math.round(next)))
-                        : 1,
-                    });
-                  }}
-                  aria-label="循环次数"
-                  className="h-9 w-24"
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  次（1–1,000，从开始日期算起）
-                </span>
-              </div>
-            ) : null}
-          </div>
+          </details>
         </div>
-      )}
 
       <div className="rounded-lg border border-primary/25 bg-primary/[0.06] px-3 py-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
           中文摘要
         </p>
         <p className="mt-0.5 text-sm font-medium">{summary}</p>
-        {rule ? (
-          <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">
-            {rule}
-          </p>
-        ) : null}
       </div>
 
       <FieldError message={displayError} />

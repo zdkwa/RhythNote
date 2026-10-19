@@ -34,6 +34,12 @@ const LEGEND_ITEMS: LegendItem[] = [
     description: "总数 = 0",
     swatch: "hsl(var(--cal-gray) / 0.72)",
   },
+  {
+    state: "upcoming",
+    label: "未开始",
+    description: "未来日期，只显示计划安排",
+    swatch: "hsl(var(--cal-upcoming) / 0.5)",
+  },
 ];
 
 export function CalendarLegend({ className }: { className?: string }) {

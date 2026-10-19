@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { DailyRecord, Task, TaskPause } from "@/types/domain";
 import {
   buildCalendarSummaries,
+  calendarStateForDate,
   calendarStateFromSummary,
+  isTaskOverdue,
   sortDayItems,
 } from "@/domain/day";
 
@@ -67,6 +69,41 @@ describe("day summaries", () => {
     expect(summaries.get("2026-10-20")?.total).toBe(0);
   });
 
+  it("does not judge recurring dates before the task was created", () => {
+    const summaries = buildCalendarSummaries({
+      tasks: [
+        task({
+          taskDate: "2026-10-15",
+          createdAt: "2026-10-19T12:00:00.000Z",
+          recurrenceRule: "FREQ=DAILY;INTERVAL=1",
+        }),
+      ],
+      records: [],
+      pauses: [],
+      start: "2026-10-15",
+      end: "2026-10-21",
+    });
+    expect(summaries.get("2026-10-15")?.total).toBe(0);
+    expect(summaries.get("2026-10-18")?.total).toBe(0);
+    expect(summaries.get("2026-10-19")?.total).toBe(1);
+    expect(summaries.get("2026-10-20")?.total).toBe(1);
+  });
+
+  it("only marks a task overdue 30 minutes after its end time", () => {
+    const target = task({ endTime: "10:00" });
+    expect(isTaskOverdue(target, "2026-10-19", false, "2026-10-19", "10:01")).toBe(false);
+    expect(isTaskOverdue(target, "2026-10-19", false, "2026-10-19", "10:29")).toBe(false);
+    expect(isTaskOverdue(target, "2026-10-19", false, "2026-10-19", "10:30")).toBe(true);
+    expect(isTaskOverdue(target, "2026-10-19", true, "2026-10-19", "10:30")).toBe(false);
+    expect(isTaskOverdue(target, "2026-10-20", false, "2026-10-19", "10:01")).toBe(false);
+  });
+
+  it("treats a task without a time as overdue only on the next day", () => {
+    const target = task({ endTime: null });
+    expect(isTaskOverdue(target, "2026-10-19", false, "2026-10-19", "23:59")).toBe(false);
+    expect(isTaskOverdue(target, "2026-10-18", false, "2026-10-19", "10:00")).toBe(true);
+  });
+
   it("merges records and computes green/yellow/red", () => {
     const summaries = build([task()], [record()]);
     expect(summaries.get("2026-10-19")?.done).toBe(1);
@@ -79,6 +116,24 @@ describe("day summaries", () => {
     expect(
       calendarStateFromSummary(summaries.get("2026-10-20")!),
     ).toBe("none");
+  });
+
+  it("marks future dates with tasks as upcoming instead of unfinished", () => {
+    const summaries = build([task()]);
+    expect(
+      calendarStateForDate(
+        summaries.get("2026-10-21")!,
+        "2026-10-21",
+        "2026-10-19",
+      ),
+    ).toBe("upcoming");
+    expect(
+      calendarStateForDate(
+        summaries.get("2026-10-19")!,
+        "2026-10-19",
+        "2026-10-19",
+      ),
+    ).toBe("red");
   });
 
   it("excludes paused dates from totals", () => {

@@ -13,7 +13,6 @@ import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
@@ -48,8 +47,6 @@ import { pickPaletteColor } from "@/features/categories/color-picker";
 import { RecurrenceEditor } from "@/features/tasks/recurrence-editor";
 import {
   createRuleValue,
-  effectiveRule,
-  formatRuleSummary,
   resolveRuleValue,
   validateRuleText,
   type RuleEditorValue,
@@ -176,7 +173,7 @@ function createDefaults(
     title: task?.title ?? "",
     description: task?.description ?? "",
     type,
-    priority: task?.priority ?? "medium",
+    priority: type === "recurring" ? "medium" : (task?.priority ?? "medium"),
     timeSemantic: type === "recurring" ? "planned" : (task?.timeSemantic ?? "planned"),
     taskDate,
     hasTimeRange:
@@ -233,7 +230,7 @@ function buildTaskInput(
     title: values.title,
     description: values.description.trim() || null,
     type: values.type,
-    priority: values.priority,
+    priority: values.type === "recurring" ? "medium" : values.priority,
     timeSemantic,
     taskDate,
     startTime,
@@ -382,6 +379,7 @@ export function TaskEditorDialog({
     if (next === "recurring") {
       setValue("timeSemantic", "planned", { shouldDirty: true });
       setValue("hasTimeRange", true, { shouldDirty: true });
+      setValue("priority", "medium", { shouldDirty: true });
       const { startTime, endTime } = getValues();
       if (
         !TIME_PATTERN.test(startTime) ||
@@ -557,18 +555,10 @@ export function TaskEditorDialog({
     await commitSave(input);
   });
 
-  const recurrencePreview =
-    values.type === "recurring"
-      ? (() => {
-          const rule = effectiveRule(ruleValue, values.taskDate);
-          return rule ? formatRuleSummary(rule) : "请补全循环规则";
-        })()
-      : null;
-
   return (
     <>
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-h-[calc(100vh-2.5rem)] max-w-3xl overflow-y-auto scrollbar-thin">
+        <DialogContent className="max-h-[calc(100vh-2.5rem)] max-w-2xl overflow-y-auto scrollbar-thin">
           <DialogHeader>
             <DialogTitle>{task ? "编辑任务" : "新建任务"}</DialogTitle>
             <DialogDescription>
@@ -578,7 +568,7 @@ export function TaskEditorDialog({
                       ? "保存后不会预生成任何每日记录。"
                       : "取消完成后才能修改日期与时间。"
                   }`
-                : "选择类型、时间语义与（循环任务的）循环规则。保存只写入任务定义，不会预生成每日记录。"}
+                : "填写标题、日期与时间即可；更多选项和循环规则按需展开。"}
             </DialogDescription>
           </DialogHeader>
 
@@ -596,7 +586,12 @@ export function TaskEditorDialog({
               </div>
             ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div
+              className={cn(
+                "grid gap-4",
+                values.type === "once" && "sm:grid-cols-2",
+              )}
+            >
               <div className="space-y-1.5">
                 <Label>任务类型</Label>
                 {task ? (
@@ -620,21 +615,23 @@ export function TaskEditorDialog({
                   />
                 )}
               </div>
-              <div className="space-y-1.5">
-                <Label>优先级</Label>
-                <Controller
-                  control={control}
-                  name="priority"
-                  render={({ field }) => (
-                    <Segmented
-                      ariaLabel="任务优先级"
-                      value={field.value}
-                      options={PRIORITY_OPTIONS}
-                      onChange={field.onChange}
-                    />
-                  )}
-                />
-              </div>
+              {values.type === "once" ? (
+                <div className="space-y-1.5">
+                  <Label>优先级</Label>
+                  <Controller
+                    control={control}
+                    name="priority"
+                    render={({ field }) => (
+                      <Segmented
+                        ariaLabel="任务优先级"
+                        value={field.value}
+                        options={PRIORITY_OPTIONS}
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-1.5">
@@ -655,25 +652,12 @@ export function TaskEditorDialog({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="task-description">说明</Label>
-              <Textarea
-                id="task-description"
-                placeholder="循环任务的说明属于整个系列，不是每日备注。"
-                maxLength={2000}
-                disabled={readOnly}
-                className="min-h-[76px]"
-                {...register("description")}
-              />
-              <div className="flex items-center justify-between">
-                <FieldError message={errors.description?.message} />
-                <span className="ml-auto text-[10px] text-muted-foreground">
-                  {values.description.length}/2000
-                </span>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div
+              className={cn(
+                "grid gap-4",
+                values.type === "once" && "sm:grid-cols-2",
+              )}
+            >
               <div className="space-y-1.5">
                 <Label htmlFor="task-date">
                   {values.type === "recurring" ? "开始日期" : "任务日期"}
@@ -691,16 +675,9 @@ export function TaskEditorDialog({
                   </p>
                 ) : null}
               </div>
-              <div className="space-y-1.5">
-                <Label>时间语义</Label>
-                {values.type === "recurring" ? (
-                  <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-muted/50 px-3 text-sm">
-                    <span>计划</span>
-                    <Badge variant="secondary" className="ml-auto">
-                      循环任务固定
-                    </Badge>
-                  </div>
-                ) : (
+              {values.type === "once" ? (
+                <div className="space-y-1.5">
+                  <Label>时间语义</Label>
                   <Controller
                     control={control}
                     name="timeSemantic"
@@ -718,16 +695,14 @@ export function TaskEditorDialog({
                       />
                     )}
                   />
-                )}
-                <FieldError message={errors.timeSemantic?.message} />
-                <p className="text-[11px] leading-5 text-muted-foreground">
-                  {values.type === "recurring"
-                    ? "循环任务必须填写完整时间段，不支持跨午夜。"
-                    : values.timeSemantic === "deadline"
+                  <FieldError message={errors.timeSemantic?.message} />
+                  <p className="text-[11px] leading-5 text-muted-foreground">
+                    {values.timeSemantic === "deadline"
                       ? "留空表示当天 23:59 截止；填写后表示该时刻截止。"
                       : "不设置时间段 = 全天计划；设置后必须同时填写开始与结束。"}
-                </p>
-              </div>
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             {values.type === "recurring" ? (
@@ -811,7 +786,7 @@ export function TaskEditorDialog({
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor="task-category">分类</Label>
@@ -895,85 +870,6 @@ export function TaskEditorDialog({
                   </div>
                 ) : null}
               </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <Label>
-                    <TagIcon className="mr-1 inline h-3 w-3" />
-                    标签
-                  </Label>
-                  {values.tagIds.length > 0 ? (
-                    <span className="text-[10px] text-muted-foreground">
-                      已选 {values.tagIds.length} 个
-                    </span>
-                  ) : null}
-                </div>
-                {tags.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    还没有标签，可在下方即时创建。
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {tags.map((tag) => {
-                      const active = values.tagIds.includes(tag.id);
-                      return (
-                        <button
-                          key={tag.id}
-                          type="button"
-                          aria-pressed={active}
-                          disabled={readOnly}
-                          onClick={() => toggleTag(tag.id)}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors",
-                            active
-                              ? "border-primary/45 bg-primary/10 text-primary"
-                              : "border-border/80 text-muted-foreground hover:border-primary/35 hover:text-foreground",
-                          )}
-                        >
-                          <span
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: tag.color }}
-                          />
-                          {tag.name}
-                          {active ? <Check className="h-3 w-3" /> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {!readOnly ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={newTagName}
-                      onChange={(event) => {
-                        setNewTagName(event.target.value);
-                        if (tagError) setTagError(null);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void handleCreateTagInline();
-                        }
-                      }}
-                      placeholder="新标签名称"
-                      maxLength={NAME_MAX}
-                      aria-label="新标签名称"
-                      className="h-8 text-xs"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={createTag.isPending}
-                      onClick={() => void handleCreateTagInline()}
-                    >
-                      <Plus className="h-3 w-3" />
-                      添加
-                    </Button>
-                  </div>
-                ) : null}
-                <FieldError message={tagError ?? undefined} />
-              </div>
             </div>
 
             {values.type === "recurring" ? (
@@ -985,11 +881,117 @@ export function TaskEditorDialog({
                   onChange={setRuleValue}
                   error={ruleError}
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  保存预览：{recurrencePreview}
-                </p>
               </>
             ) : null}
+
+            <details className="group rounded-xl border border-border/80 bg-muted/20 px-4 py-3">
+              <summary className="cursor-pointer list-none text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">
+                更多选项（说明、标签）
+                {values.tagIds.length > 0 ? (
+                  <span className="ml-2 font-normal text-primary">
+                    已选 {values.tagIds.length} 个标签
+                  </span>
+                ) : null}
+              </summary>
+              <div className="mt-4 space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="task-description">说明</Label>
+                  <Textarea
+                    id="task-description"
+                    placeholder="补充任务背景或系列说明；循环任务的说明不是每日备注。"
+                    maxLength={2000}
+                    disabled={readOnly}
+                    className="min-h-[72px]"
+                    {...register("description")}
+                  />
+                  <div className="flex items-center justify-between">
+                    <FieldError message={errors.description?.message} />
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      {values.description.length}/2000
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Label>
+                      <TagIcon className="mr-1 inline h-3 w-3" />
+                      标签
+                    </Label>
+                    {values.tagIds.length > 0 ? (
+                      <span className="text-[10px] text-muted-foreground">
+                        已选 {values.tagIds.length} 个
+                      </span>
+                    ) : null}
+                  </div>
+                  {tags.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      还没有标签，可在下方即时创建。
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tags.map((tag) => {
+                        const active = values.tagIds.includes(tag.id);
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            aria-pressed={active}
+                            disabled={readOnly}
+                            onClick={() => toggleTag(tag.id)}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors",
+                              active
+                                ? "border-primary/45 bg-primary/10 text-primary"
+                                : "border-border/80 text-muted-foreground hover:border-primary/35 hover:text-foreground",
+                            )}
+                          >
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                            {tag.name}
+                            {active ? <Check className="h-3 w-3" /> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {!readOnly ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={newTagName}
+                        onChange={(event) => {
+                          setNewTagName(event.target.value);
+                          if (tagError) setTagError(null);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void handleCreateTagInline();
+                          }
+                        }}
+                        placeholder="新标签名称"
+                        maxLength={NAME_MAX}
+                        aria-label="新标签名称"
+                        className="h-8 text-xs"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={createTag.isPending}
+                        onClick={() => void handleCreateTagInline()}
+                      >
+                        <Plus className="h-3 w-3" />
+                        添加
+                      </Button>
+                    </div>
+                  ) : null}
+                  <FieldError message={tagError ?? undefined} />
+                </div>
+              </div>
+            </details>
 
             {generalError ? (
               <p className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">

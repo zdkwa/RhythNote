@@ -1,17 +1,18 @@
 import {
   Archive,
   CalendarDays,
-  CheckCircle2,
-  Circle,
+  Check,
   MoreHorizontal,
   PauseCircle,
   Pencil,
   PlayCircle,
   Repeat2,
   TimerReset,
+  Undo2,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { isTaskOverdue } from "@/domain/day";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -146,9 +147,11 @@ function StatusBadge({ status }: { status: StatusInfo }) {
 function DefinitionStatusBadge({
   task,
   today,
+  nowTime,
 }: {
   task: TaskWithStatus;
   today: string;
+  nowTime: string;
 }) {
   if (task.archivedAt) {
     return <StatusBadge status={{ label: "已归档", variant: "archived" }} />;
@@ -165,7 +168,11 @@ function DefinitionStatusBadge({
         />
       );
     }
-    return <StatusBadge status={{ label: "未完成", variant: "outline" }} />;
+    return isTaskOverdue(task, task.taskDate, false, today, nowTime) ? (
+      <StatusBadge status={{ label: "逾期", variant: "destructive" }} />
+    ) : (
+      <StatusBadge status={{ label: "未完成", variant: "outline" }} />
+    );
   }
 
   const probe = probeTaskOccurrence(task, today);
@@ -180,13 +187,24 @@ function DefinitionStatusBadge({
   if (task.todayRecord?.status === "done") {
     return <StatusBadge status={{ label: "今天已完成", variant: "done" }} />;
   }
+  const overdueToday = isTaskOverdue(task, today, false, today, nowTime);
   if (task.todayRecord?.status === "undone") {
     return (
-      <StatusBadge status={{ label: "今天未完成（有备注）", variant: "outline" }} />
+      <StatusBadge
+        status={
+          overdueToday
+            ? { label: "今天已逾期（有备注）", variant: "destructive" }
+            : { label: "今天未完成（有备注）", variant: "outline" }
+        }
+      />
     );
   }
   if (probe.occurs) {
-    return <StatusBadge status={{ label: "今天待完成", variant: "outline" }} />;
+    return overdueToday ? (
+      <StatusBadge status={{ label: "今天已逾期", variant: "destructive" }} />
+    ) : (
+      <StatusBadge status={{ label: "今天待完成", variant: "outline" }} />
+    );
   }
   return <StatusBadge status={{ label: "今天无安排", variant: "outline" }} />;
 }
@@ -195,6 +213,7 @@ interface DefinitionCardProps {
   variant: "definition";
   task: TaskWithStatus;
   today: string;
+  nowTime: string;
   onEdit: (task: Task) => void;
 }
 
@@ -202,6 +221,7 @@ interface OccurrenceCardProps {
   variant: "occurrence";
   item: OccurrenceWithStatus;
   today: string;
+  nowTime: string;
   showDate?: boolean;
   onEdit: (task: Task) => void;
 }
@@ -234,18 +254,21 @@ function CompleteToggle({
         onToggle();
       }}
       className={cn(
-        "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors",
+        "mt-0.5 inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[10px] font-semibold transition-colors",
         done
-          ? "border-primary/40 bg-primary/12 text-primary"
-          : "border-border/90 text-muted-foreground hover:border-primary/45 hover:text-primary",
+          ? "border-destructive/35 bg-destructive/[0.06] text-destructive hover:bg-destructive/10"
+          : label === "补做"
+            ? "border-amber-500/50 bg-amber-500 text-white hover:bg-amber-600"
+            : "border-emerald-600/50 bg-emerald-600 text-white hover:bg-emerald-700",
         (disabled || busy) && "cursor-not-allowed opacity-50",
       )}
     >
       {done ? (
-        <CheckCircle2 className="h-4 w-4" />
+        <Undo2 className="h-3 w-3" />
       ) : (
-        <Circle className="h-4 w-4" />
+        <Check className="h-3 w-3" />
       )}
+      <span className="whitespace-nowrap">{label}</span>
     </button>
   );
 
@@ -325,7 +348,7 @@ function ActionMenu({
   );
 }
 
-function DefinitionCard({ task, today, onEdit }: DefinitionCardProps) {
+function DefinitionCard({ task, today, nowTime, onEdit }: DefinitionCardProps) {
   const setOnceCompletion = useSetOnceCompletion();
   const archiveTask = useArchiveTask();
   const addPause = useAddPause();
@@ -341,6 +364,13 @@ function DefinitionCard({ task, today, onEdit }: DefinitionCardProps) {
       ? probeTaskOccurrence(task, today)
       : { occurs: false, broken: false };
   const future = task.taskDate > today;
+  const overdue = isTaskOverdue(
+    task,
+    task.taskDate,
+    Boolean(task.completedAt),
+    today,
+    nowTime,
+  );
 
   const canPauseToday =
     task.type === "recurring" &&
@@ -409,27 +439,26 @@ function DefinitionCard({ task, today, onEdit }: DefinitionCardProps) {
       data-completed={completedOnce ? "true" : "false"}
     >
       <div className="flex items-start gap-3">
-        {task.type === "once" ? (
-          <CompleteToggle
-            done={Boolean(task.completedAt)}
-            disabled={archived || future}
-            disabledHint={future ? "未来日期不可打卡" : undefined}
-            busy={setOnceCompletion.isPending}
-            onToggle={() => void handleToggleOnce()}
-            label={task.completedAt ? "取消完成" : "完成"}
-          />
-        ) : (
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/80 text-muted-foreground">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/80 bg-muted/35 text-muted-foreground">
+          {task.type === "recurring" ? (
             <Repeat2 className="h-4 w-4" />
-          </span>
-        )}
+          ) : (
+            <CalendarDays className="h-4 w-4" />
+          )}
+        </span>
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="min-w-0 truncate text-sm font-semibold">{task.title}</h3>
             <TypeBadge type={task.type} />
-            <PriorityBadge priority={task.priority} />
-            <DefinitionStatusBadge task={task} today={today} />
+            {task.type === "once" ? (
+              <PriorityBadge priority={task.priority} />
+            ) : null}
+            <DefinitionStatusBadge
+              task={task}
+              today={today}
+              nowTime={nowTime}
+            />
             {task.type === "once" && task.isBackfilled && task.completedAt ? (
               <Badge variant="backfill">补做</Badge>
             ) : null}
@@ -473,6 +502,17 @@ function DefinitionCard({ task, today, onEdit }: DefinitionCardProps) {
             <TagChips tags={task.tags} />
           </div>
         </div>
+
+        {task.type === "once" ? (
+          <CompleteToggle
+            done={Boolean(task.completedAt)}
+            disabled={archived || future}
+            disabledHint={future ? "未来日期不可打卡" : undefined}
+            busy={setOnceCompletion.isPending}
+            onToggle={() => void handleToggleOnce()}
+            label={task.completedAt ? "取消完成" : overdue ? "补做" : "完成"}
+          />
+        ) : null}
 
         <ActionMenu
           archived={archived}
@@ -520,6 +560,7 @@ function DefinitionCard({ task, today, onEdit }: DefinitionCardProps) {
 function OccurrenceCard({
   item,
   today,
+  nowTime,
   showDate = false,
   onEdit,
 }: OccurrenceCardProps) {
@@ -552,6 +593,7 @@ function OccurrenceCard({
   const backfilled =
     done && (task.type === "once" ? task.isBackfilled : Boolean(record?.isBackfilled));
   const future = date > today;
+  const overdue = isTaskOverdue(task, date, done, today, nowTime);
   const busy =
     setOnceCompletion.isPending ||
     upsertRecord.isPending ||
@@ -568,9 +610,15 @@ function OccurrenceCard({
         ? backfilled
           ? { label: "已补做", variant: "backfill" }
           : { label: "已完成", variant: "done" }
-        : record?.status === "undone"
-          ? { label: "未完成（有备注）", variant: "outline" }
-          : { label: "未完成", variant: "outline" };
+        : overdue
+          ? {
+              label:
+                record?.status === "undone" ? "逾期（有备注）" : "逾期",
+              variant: "destructive",
+            }
+          : record?.status === "undone"
+            ? { label: "未完成（有备注）", variant: "outline" }
+            : { label: "未完成", variant: "outline" };
 
   const flushNote = async () => {
     await noteRef.current?.flush();
@@ -683,23 +731,6 @@ function OccurrenceCard({
       data-completed={done ? "true" : "false"}
     >
       <div className="flex items-start gap-3">
-        <CompleteToggle
-          done={done}
-          disabled={future || isArchived || isPaused}
-          disabledHint={
-            isArchived
-              ? "归档任务只读"
-              : isPaused
-                ? "该日期已暂停"
-                : future
-                  ? "未来日期不可打卡"
-                  : undefined
-          }
-          busy={busy}
-          onToggle={() => void (done ? handleUncomplete() : handleComplete())}
-          label={done ? "取消完成" : date < today ? "补做" : "完成"}
-        />
-
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="min-w-0 truncate text-sm font-semibold">{task.title}</h3>
@@ -710,7 +741,9 @@ function OccurrenceCard({
               </Badge>
             ) : null}
             <TypeBadge type={task.type} />
-            <PriorityBadge priority={task.priority} />
+            {task.type === "once" ? (
+              <PriorityBadge priority={task.priority} />
+            ) : null}
             <StatusBadge status={status} />
             {backfilled ? <Badge variant="backfill">补做</Badge> : null}
             {isArchived ? <Badge variant="archived">已归档</Badge> : null}
@@ -736,6 +769,23 @@ function OccurrenceCard({
 
         </div>
 
+        <CompleteToggle
+          done={done}
+          disabled={future || isArchived || isPaused}
+          disabledHint={
+            isArchived
+              ? "归档任务只读"
+              : isPaused
+                ? "该日期已暂停"
+                : future
+                  ? "未来日期不可打卡"
+                  : undefined
+          }
+          busy={busy}
+          onToggle={() => void (done ? handleUncomplete() : handleComplete())}
+          label={done ? "取消完成" : overdue ? "补做" : "完成"}
+        />
+
         <ActionMenu
           archived={isArchived}
           onEdit={() => onEdit(task)}
@@ -751,7 +801,7 @@ function OccurrenceCard({
       !isPaused &&
       !isArchived &&
       !future ? (
-        <div className="mt-2 pl-8">
+        <div className="mt-2">
           <InlineNote
             ref={noteRef}
             taskId={task.id}

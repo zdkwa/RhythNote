@@ -3,18 +3,21 @@ import {
   CircleDot,
   ListTodo,
   Moon,
+  Plus,
   Repeat2,
   Settings,
   Sun,
   TimerReset,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useCategories, useTasks } from "@/data/queries";
 import { usingMemoryDatabase } from "@/data";
 import { useTheme } from "@/hooks/useTheme";
 import { useToday } from "@/hooks/useToday";
 import { cn } from "@/lib/utils";
-import { dateWithWeekday } from "@/lib/date";
+import { Button } from "@/components/ui/button";
+import { TaskEditorDialog } from "@/features/tasks/task-editor-dialog";
 
 function BrandMark() {
   return (
@@ -68,6 +71,30 @@ export function Sidebar() {
   const today = useToday();
   const location = useLocation();
   const isHome = location.pathname === "/" || location.pathname.startsWith("/day/");
+  const [createOpen, setCreateOpen] = useState(false);
+  const defaultType =
+    location.pathname === "/tasks/recurring"
+      ? "recurring"
+      : location.pathname === "/tasks/once"
+        ? "once"
+        : undefined;
+  const defaultCategoryId = location.pathname.startsWith("/categories/")
+    ? (location.pathname.split("/")[2] ?? null)
+    : null;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
+        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+          return;
+        }
+        event.preventDefault();
+        setCreateOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const activeByCategory = new Map<string, number>();
   for (const task of tasks) {
@@ -93,14 +120,17 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="mt-6 rounded-xl border border-white/8 bg-white/[0.035] px-3 py-2.5">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-[hsl(var(--sidebar-muted))]">
-          今天
-        </p>
-        <p className="mt-1 text-[13px] font-medium text-[hsl(var(--sidebar-foreground))]">
-          {dateWithWeekday(today)}
-        </p>
-      </div>
+      <Button
+        type="button"
+        onClick={() => setCreateOpen(true)}
+        className="mt-6 w-full justify-start gap-2 border border-white/10 bg-white/[0.08] text-[hsl(var(--sidebar-foreground))] shadow-none hover:bg-white/[0.14]"
+      >
+        <Plus className="h-4 w-4" />
+        新建任务
+        <kbd className="ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[9px] font-normal text-[hsl(var(--sidebar-muted))]">
+          Ctrl N
+        </kbd>
+      </Button>
 
       <nav className="mt-5 flex flex-1 flex-col gap-6 overflow-y-auto pr-1 scrollbar-thin">
         <div className="space-y-1">
@@ -115,7 +145,7 @@ export function Sidebar() {
             )}
           >
             <CalendarDays className="h-4 w-4" />
-            首页 · 日历
+            首页
           </NavLink>
           <NavItem to="/tasks" label="全部任务" icon={ListTodo} end />
         </div>
@@ -214,6 +244,14 @@ export function Sidebar() {
           </button>
         </div>
       </div>
+
+      <TaskEditorDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        defaultDate={today}
+        defaultType={defaultType}
+        defaultCategoryId={defaultCategoryId}
+      />
     </aside>
   );
 }

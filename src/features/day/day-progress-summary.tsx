@@ -8,21 +8,25 @@ const BAR_COLOR: Record<CalendarState, string> = {
   yellow: "hsl(var(--cal-yellow))",
   red: "hsl(var(--cal-red))",
   none: "hsl(var(--cal-gray))",
+  upcoming: "hsl(var(--cal-upcoming))",
 };
 
 export interface DayProgressSummaryProps {
   summary: DaySummary;
   historyCount: number;
+  isFuture?: boolean;
   className?: string;
 }
 
 export function DayProgressSummary({
   summary,
   historyCount,
+  isFuture = false,
   className,
 }: DayProgressSummaryProps) {
   const state = calendarStateFromSummary(summary);
   const percent = progressPercent(summary.done, summary.total);
+  const unstarted = isFuture;
 
   return (
     <section
@@ -32,28 +36,37 @@ export function DayProgressSummary({
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="flex items-end gap-2">
           <span className="pb-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            已完成
+            {unstarted ? "未开始" : "已完成"}
           </span>
           <span className="display-number text-4xl font-semibold leading-none text-foreground">
-            {summary.done}
+            {unstarted ? summary.total : summary.done}
           </span>
           <span className="pb-0.5 text-sm text-muted-foreground">
-            / {summary.total}
+            {unstarted ? "项计划" : `/ ${summary.total}`}
           </span>
         </div>
         <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-xs text-muted-foreground">
-          <div className="flex items-baseline gap-1">
-            <dt>未完成</dt>
-            <dd className="font-semibold tabular-nums text-foreground">
-              {summary.unfinished}
-            </dd>
-          </div>
-          <div className="flex items-baseline gap-1">
-            <dt>暂停</dt>
-            <dd className="font-semibold tabular-nums text-foreground">
-              {summary.paused}
-            </dd>
-          </div>
+          {unstarted ? (
+            <div className="flex items-baseline gap-1">
+              <dt>未来日期</dt>
+              <dd className="font-semibold text-foreground">只读</dd>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-1">
+                <dt>未完成</dt>
+                <dd className="font-semibold tabular-nums text-foreground">
+                  {summary.unfinished}
+                </dd>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <dt>暂停</dt>
+                <dd className="font-semibold tabular-nums text-foreground">
+                  {summary.paused}
+                </dd>
+              </div>
+            </>
+          )}
           {historyCount > 0 ? (
             <div className="flex items-baseline gap-1">
               <dt>历史记录</dt>
@@ -67,13 +80,13 @@ export function DayProgressSummary({
 
       <div
         role="progressbar"
-        aria-label="当天完成进度"
+        aria-label={unstarted ? "未来计划" : "当天完成进度"}
         aria-valuemin={0}
         aria-valuemax={summary.total}
-        aria-valuenow={summary.done}
+        aria-valuenow={unstarted ? 0 : summary.done}
         className="mt-3 h-2 overflow-hidden rounded-full bg-ink/10"
       >
-        {summary.total > 0 ? (
+        {summary.total > 0 && !unstarted ? (
           <div
             className="h-full rounded-full transition-[width] duration-200"
             style={{

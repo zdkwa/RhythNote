@@ -368,6 +368,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
                 variant="definition"
                 task={task}
                 today={today}
+                nowTime={nowTime}
                 onEdit={openEdit}
               />
             ))}
@@ -408,6 +409,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
                 variant="occurrence"
                 item={item}
                 today={today}
+                nowTime={nowTime}
                 onEdit={openEdit}
               />
             ))}
@@ -424,6 +426,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
                     variant="occurrence"
                     item={item}
                     today={today}
+                    nowTime={nowTime}
                     onEdit={openEdit}
                   />
                 ))}
@@ -471,6 +474,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
                       variant="occurrence"
                       item={item}
                       today={today}
+                      nowTime={nowTime}
                       onEdit={openEdit}
                     />
                   ))}
@@ -501,6 +505,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
               variant="occurrence"
               item={item}
               today={today}
+              nowTime={nowTime}
               showDate
               onEdit={openEdit}
             />
@@ -527,15 +532,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
         eyebrow={eyebrow}
         title={title}
         description={description}
-        actions={
-          <>
-            <QuickFilter value={scope} onChange={setScope} />
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              新建任务
-            </Button>
-          </>
-        }
+        actions={<QuickFilter value={scope} onChange={setScope} />}
       />
 
       {category ? (
