@@ -12,9 +12,9 @@ V1 功能实现完成：Tauri 2 工程、SQLite 迁移与 Repository、任务 CR
 
 | 文件 | 说明 |
 |---|---|
-| [RhythNote_0.1.0_x64-setup.exe](release/RhythNote_0.1.0_x64-setup.exe) | Windows x64 NSIS 安装包，推荐 |
-| [RhythNote.exe](release/RhythNote.exe) | 便携版，直接运行 |
-| [发布说明](release/README.md) | 版本、SHA256 与数据位置 |
+| [RhythNote_0.1.0_x64-setup.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.0/RhythNote_0.1.0_x64-setup.exe) | Windows x64 NSIS 安装包，推荐 |
+| [RhythNote.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.0/RhythNote.exe) | 便携版，直接运行 |
+| [GitHub Release v0.1.0](https://github.com/zdkwa/RhythNote/releases/tag/v0.1.0) | 版本发布页与校验信息 |
 
 ## 功能
 

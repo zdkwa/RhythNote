@@ -2,14 +2,15 @@
 
 版本：`0.1.0`  
 平台：Windows 10/11 x64  
-构建日期：2026-10-19
+构建日期：2026-10-19  
+GitHub Release：<https://github.com/zdkwa/RhythNote/releases/tag/v0.1.0>
 
-## 文件
+## 下载
 
 | 文件 | 用途 | 大小 |
 |---|---|---|
-| `RhythNote_0.1.0_x64-setup.exe` | NSIS 安装包，推荐普通用户使用 | 2.33 MiB |
-| `RhythNote.exe` | 便携版，下载后直接运行 | 6.24 MiB |
+| [RhythNote_0.1.0_x64-setup.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.0/RhythNote_0.1.0_x64-setup.exe) | NSIS 安装包，推荐普通用户使用 | 2.33 MiB |
+| [RhythNote.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.0/RhythNote.exe) | 便携版，下载后直接运行 | 6.24 MiB |
 
 ## 安装 / 运行
 
