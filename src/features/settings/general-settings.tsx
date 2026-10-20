@@ -79,7 +79,7 @@ export function GeneralSettings() {
       <section className="paper-panel rounded-2xl p-5">
         <h2 className="font-display text-lg font-semibold">关于 RhythNote</h2>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          用规则描述重复，用记录保存事实。当前版本 0.1.2；归档在 V1 中为单向操作，历史记录永久保留。
+          用规则描述重复，用记录保存事实。当前版本 0.1.3；归档在 V1 中为单向操作，历史记录永久保留。
         </p>
       </section>
     </div>

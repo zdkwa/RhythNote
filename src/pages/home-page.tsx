@@ -16,16 +16,20 @@ import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useDayActions } from "@/features/day/use-day-actions";
 import { isItemDone } from "@/features/day/day-items";
-import { useWorkspaceBundle } from "@/data/queries";
+import { useRecords, useWorkspaceBundle } from "@/data/queries";
 import { useClock, useToday } from "@/hooks/useToday";
 import {
   buildCalendarSummaries,
   buildDaySummary,
+  collectCheckinDates,
   isTaskOverdue,
+  isTaskStartingSoon,
   isTodayWithinBlock,
+  minutesFromTimeBlock,
 } from "@/domain/day";
 import {
   addMonthsKey,
+  dateRange,
   dateWithWeekday,
   isValidMonthKey,
   monthGridRange,
@@ -33,6 +37,8 @@ import {
   parseDateKey,
   timeRangeLabel,
   toMonthKey,
+  weekRange,
+  weekdayShort,
 } from "@/lib/date";
 import { PRIORITY_ORDER, type DayItem } from "@/types/domain";
 import { CalendarLegend } from "@/features/calendar/calendar-legend";
@@ -53,7 +59,7 @@ function StatCard({
   label: string;
   value: number | string;
   suffix?: string;
-  hint: string;
+  hint?: string;
   tone?: "primary" | "danger" | "warm" | "neutral";
 }) {
   const toneClass = {
@@ -78,7 +84,68 @@ function StatCard({
           </span>
         ) : null}
       </p>
-      <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">{hint}</p>
+      {hint ? (
+        <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function CheckinCard({
+  dates,
+  today,
+}: {
+  dates: Set<string>;
+  today: string;
+}) {
+  const week = weekRange(today);
+  const weekDays = dateRange(week.start, week.end);
+
+  return (
+    <div className="rounded-2xl border border-accent/25 bg-accent/[0.055] px-4 py-3.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        已打卡天数
+      </p>
+      <p className="mt-2 flex items-baseline gap-1">
+        <span className="display-number text-3xl font-semibold leading-none">
+          {dates.size}
+        </span>
+        <span className="text-xs font-medium text-muted-foreground">天</span>
+      </p>
+      <div
+        className="mt-3 flex items-end justify-between gap-1"
+        aria-label="本周打卡记录"
+      >
+        {weekDays.map((date) => {
+          const checked = dates.has(date);
+          const isToday = date === today;
+          return (
+            <span
+              key={date}
+              title={`${date} ${checked ? "已打卡" : "未打卡"}`}
+              className="flex flex-1 flex-col items-center gap-1"
+            >
+              <span
+                className={cn(
+                  "h-2 w-full max-w-[18px] rounded-full transition-colors",
+                  checked ? "bg-primary" : "bg-muted-foreground/20",
+                  isToday && "ring-2 ring-primary/30 ring-offset-1 ring-offset-card",
+                )}
+              />
+              <span
+                className={cn(
+                  "text-[8px] leading-none",
+                  isToday
+                    ? "font-semibold text-primary"
+                    : "text-muted-foreground",
+                )}
+              >
+                {weekdayShort(date).replace("周", "")}
+              </span>
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -98,6 +165,10 @@ function DashboardTaskRow({
 }) {
   const done = isItemDone(item);
   const isOnce = item.task.type === "once";
+  const doing =
+    !done && isTodayWithinBlock(item.task, item.date, today, now);
+  const startingSoon =
+    !done && isTaskStartingSoon(item.task, item.date, today, now);
   const overdue = isTaskOverdue(item.task, item.date, done, today, now);
   const time = timeRangeLabel(
     item.task.startTime,
@@ -109,6 +180,7 @@ function DashboardTaskRow({
     <div
       className={cn(
         "group flex items-center gap-3 rounded-xl border border-border/70 bg-card/60 px-3 py-2.5 transition-colors",
+        doing && "border-primary/35 bg-primary/[0.035]",
         done && "opacity-60",
       )}
     >
@@ -131,6 +203,15 @@ function DashboardTaskRow({
             </span>
           ) : null}
           {isOnce ? <Badge variant="outline" className="px-1.5 py-0 text-[9px]">临时</Badge> : null}
+          {doing ? (
+            <Badge variant="done" className="px-1.5 py-0 text-[9px]">
+              正在做
+            </Badge>
+          ) : startingSoon ? (
+            <Badge variant="accent" className="px-1.5 py-0 text-[9px]">
+              即将开始
+            </Badge>
+          ) : null}
           {!done && overdue ? (
             <Badge variant="destructive" className="px-1.5 py-0 text-[9px]">
               逾期
@@ -197,6 +278,7 @@ export function HomePage() {
   }, [rawMonth, currentMonthKey, params, setParams]);
 
   const todayBundle = useWorkspaceBundle(today, today, true);
+  const historyRecordsQuery = useRecords("1970-01-01", today);
   const todayPauses = useMemo(
     () => toTaskPauses(todayBundle.pauses),
     [todayBundle.pauses],
@@ -238,31 +320,31 @@ export function HomePage() {
 
   const actions = useDayActions(today);
 
-  const currentAllItems = useMemo(
+  const loopUnfinishedItems = useMemo(
     () =>
       todaySummary.items
         .filter(
           (item) =>
             item.kind === "scheduled" &&
+            item.task.type === "recurring" &&
             !item.isPaused &&
-            !isItemDone(item) &&
-            isTodayWithinBlock(item.task, item.date, today, now),
+            !isItemDone(item),
         )
-        .sort(
-          (a, b) =>
-            (a.task.startTime ?? "24:00").localeCompare(
-              b.task.startTime ?? "24:00",
-            ),
-        ),
+        .sort((a, b) => {
+          const aCurrent = isTodayWithinBlock(a.task, a.date, today, now);
+          const bCurrent = isTodayWithinBlock(b.task, b.date, today, now);
+          if (aCurrent !== bCurrent) return aCurrent ? -1 : 1;
+          const aDistance = minutesFromTimeBlock(a.task, a.date, today, now);
+          const bDistance = minutesFromTimeBlock(b.task, b.date, today, now);
+          if (aDistance !== bDistance) return aDistance < bDistance ? -1 : 1;
+          return (a.task.startTime ?? "24:00").localeCompare(
+            b.task.startTime ?? "24:00",
+          );
+        }),
     [todaySummary.items, today, now],
   );
 
-  const currentItems = useMemo(
-    () => currentAllItems.filter((item) => item.task.type === "recurring"),
-    [currentAllItems],
-  );
-
-  const unfinishedTemporaryItems = useMemo(
+  const temporaryUnfinishedItems = useMemo(
     () =>
       todaySummary.items
         .filter(
@@ -281,6 +363,10 @@ export function HomePage() {
             PRIORITY_ORDER[a.task.priority] - PRIORITY_ORDER[b.task.priority];
           if (priority !== 0) return priority;
 
+          const aDistance = minutesFromTimeBlock(a.task, a.date, today, now);
+          const bDistance = minutesFromTimeBlock(b.task, b.date, today, now);
+          if (aDistance !== bDistance) return aDistance < bDistance ? -1 : 1;
+
           return (a.task.startTime ?? "24:00").localeCompare(
             b.task.startTime ?? "24:00",
           );
@@ -288,7 +374,17 @@ export function HomePage() {
     [todaySummary.items, today, now],
   );
 
-  const temporaryItems = unfinishedTemporaryItems.slice(0, 5);
+  const loopItems = loopUnfinishedItems.slice(0, 2);
+  const temporaryItems = temporaryUnfinishedItems.slice(0, 2);
+
+  const checkinDates = useMemo(
+    () =>
+      collectCheckinDates(
+        todayBundle.tasks,
+        historyRecordsQuery.data ?? [],
+      ),
+    [todayBundle.tasks, historyRecordsQuery.data],
+  );
 
   const goToMonth = (nextMonth: string) => {
     const updated = new URLSearchParams(params);
@@ -371,17 +467,6 @@ export function HomePage() {
             hint={remaining > 0 ? "先处理当前时间段的任务" : "今天暂时没有未完成项"}
             tone={remaining > 0 ? "danger" : "neutral"}
           />
-          <StatCard
-            label="当前时段"
-            value={currentAllItems.length}
-            suffix="项进行中"
-            hint={
-              currentAllItems.length > 0
-                ? "优先完成正在进行的任务"
-                : "当前没有进行中的任务"
-            }
-            tone="warm"
-          />
           <div className="rounded-2xl border border-border/80 bg-card/55 px-4 py-3.5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               今日节奏
@@ -413,6 +498,7 @@ export function HomePage() {
               </div>
             </div>
           </div>
+          <CheckinCard dates={checkinDates} today={today} />
         </div>
 
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
@@ -421,15 +507,19 @@ export function HomePage() {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-                    Focus
+                    Loop
                   </p>
                   <h2 className="mt-0.5 font-display text-xl font-semibold">
-                    正在做
+                    循环任务
                   </h2>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    只展示当前时间段内正在进行中的循环任务
+                    正在做优先，其余按距离当前时间从近到远，最多展示 2 项
                   </p>
                 </div>
+                <Badge variant="outline" className="gap-1">
+                  <ListTodo className="h-3 w-3" />
+                  {loopUnfinishedItems.length} 项
+                </Badge>
               </div>
 
               {todayLoading ? (
@@ -437,14 +527,14 @@ export function HomePage() {
                   <div className="h-12 animate-pulse rounded-xl bg-muted/70" />
                   <div className="h-12 animate-pulse rounded-xl bg-muted/50" />
                 </div>
-              ) : currentItems.length === 0 ? (
+              ) : loopItems.length === 0 ? (
                 <div className="mt-3 flex items-center gap-3 rounded-xl border border-dashed border-border/80 px-3 py-4 text-sm text-muted-foreground">
                   <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-                  <span>当前没有正在进行的循环任务。</span>
+                  <span>今天没有未完成的循环任务。</span>
                 </div>
               ) : (
                 <div className="mt-3 space-y-2">
-                  {currentItems.map((item) => (
+                  {loopItems.map((item) => (
                     <DashboardTaskRow
                       key={item.key}
                       item={item}
@@ -456,6 +546,16 @@ export function HomePage() {
                   ))}
                 </div>
               )}
+
+              {loopUnfinishedItems.length > loopItems.length ? (
+                <Link
+                  to="/tasks/recurring"
+                  className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                >
+                  还有 {loopUnfinishedItems.length - loopItems.length} 项循环任务，查看全部
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              ) : null}
             </section>
 
             <section className="paper-panel rounded-2xl p-4">
@@ -465,15 +565,15 @@ export function HomePage() {
                     One-off
                   </p>
                   <h2 className="mt-0.5 font-display text-xl font-semibold">
-                    未完成的临时任务
+                    临时任务
                   </h2>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    当前时段优先 → 优先级 → 时间，最多展示 5 项
+                    当前时段 → 优先级 → 距离当前时间，最多展示 2 项
                   </p>
                 </div>
                 <Badge variant="outline" className="gap-1">
                   <ListTodo className="h-3 w-3" />
-                  {unfinishedTemporaryItems.length} 项
+                  {temporaryUnfinishedItems.length} 项
                 </Badge>
               </div>
 
@@ -496,12 +596,12 @@ export function HomePage() {
                 </div>
               )}
 
-              {unfinishedTemporaryItems.length > temporaryItems.length ? (
+              {temporaryUnfinishedItems.length > temporaryItems.length ? (
                 <Link
                   to="/tasks/once"
                   className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                 >
-                  还有 {unfinishedTemporaryItems.length - temporaryItems.length} 项未完成，查看全部临时任务
+                  还有 {temporaryUnfinishedItems.length - temporaryItems.length} 项临时任务，查看全部
                   <ArrowRight className="h-3 w-3" />
                 </Link>
               ) : null}

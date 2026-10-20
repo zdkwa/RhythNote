@@ -4,7 +4,10 @@ import {
   buildCalendarSummaries,
   calendarStateForDate,
   calendarStateFromSummary,
+  countCheckinDays,
   isTaskOverdue,
+  isTaskStartingSoon,
+  minutesFromTimeBlock,
   sortDayItems,
 } from "@/domain/day";
 
@@ -96,6 +99,63 @@ describe("day summaries", () => {
     expect(isTaskOverdue(target, "2026-10-19", false, "2026-10-19", "10:30")).toBe(true);
     expect(isTaskOverdue(target, "2026-10-19", true, "2026-10-19", "10:30")).toBe(false);
     expect(isTaskOverdue(target, "2026-10-20", false, "2026-10-19", "10:01")).toBe(false);
+  });
+
+  it("counts a check-in day only once no matter how many tasks were done", () => {
+    const records = [
+      record({ recordDate: "2026-10-19", completedAt: "2026-10-19T10:00:00.000Z" }),
+      record({ recordDate: "2026-10-19", completedAt: "2026-10-19T11:00:00.000Z" }),
+      record({ recordDate: "2026-10-18", completedAt: "2026-10-18T10:00:00.000Z" }),
+    ];
+    const once = task({
+      type: "once",
+      completedAt: "2026-10-19T12:00:00.000Z",
+      recurrenceRule: null,
+    });
+    expect(countCheckinDays([once], records)).toBe(2);
+  });
+
+  it("measures distance to the nearest edge of a task time block", () => {
+    expect(
+      minutesFromTimeBlock(
+        task({ startTime: "22:00", endTime: "23:00" }),
+        "2026-10-19",
+        "2026-10-19",
+        "21:50",
+      ),
+    ).toBe(10);
+    expect(
+      minutesFromTimeBlock(
+        task({ startTime: "20:00", endTime: "21:00" }),
+        "2026-10-19",
+        "2026-10-19",
+        "21:50",
+      ),
+    ).toBe(50);
+    expect(
+      minutesFromTimeBlock(
+        task({ startTime: "22:00", endTime: "23:00" }),
+        "2026-10-19",
+        "2026-10-19",
+        "22:30",
+      ),
+    ).toBe(0);
+    expect(
+      minutesFromTimeBlock(
+        task({ startTime: null, endTime: null }),
+        "2026-10-19",
+        "2026-10-19",
+        "21:50",
+      ),
+    ).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("marks tasks starting within 20 minutes as starting soon", () => {
+    const target = task({ startTime: "22:00", endTime: "23:00" });
+    expect(isTaskStartingSoon(target, "2026-10-19", "2026-10-19", "21:41")).toBe(true);
+    expect(isTaskStartingSoon(target, "2026-10-19", "2026-10-19", "21:39")).toBe(false);
+    expect(isTaskStartingSoon(target, "2026-10-19", "2026-10-19", "21:59")).toBe(true);
+    expect(isTaskStartingSoon(target, "2026-10-19", "2026-10-19", "22:00")).toBe(false);
   });
 
   it("treats a task without a time as overdue only on the next day", () => {

@@ -63,6 +63,45 @@ export function isTaskOverdue(
   return now >= end + 30;
 }
 
+/**
+ * 已打卡天数：只要某天完成过至少一个任务就算一天。
+ * 同一天完成多个任务只计一次，因此每天最多 +1。
+ */
+export function collectCheckinDates(
+  tasks: Task[],
+  records: DailyRecord[],
+): Set<string> {
+  const dates = new Set<string>();
+  for (const task of tasks) {
+    if (task.type !== "once" || !task.completedAt) continue;
+    try {
+      dates.add(timestampToDateKey(task.completedAt));
+    } catch {
+      // 忽略异常的审计时间戳。
+    }
+  }
+  for (const record of records) {
+    if (record.status !== "done") continue;
+    if (record.completedAt) {
+      try {
+        dates.add(timestampToDateKey(record.completedAt));
+        continue;
+      } catch {
+        // 回退到记录日期。
+      }
+    }
+    dates.add(record.recordDate);
+  }
+  return dates;
+}
+
+export function countCheckinDays(
+  tasks: Task[],
+  records: DailyRecord[],
+): number {
+  return collectCheckinDates(tasks, records).size;
+}
+
 export function calendarStateFromSummary(summary: DaySummary): CalendarState {
   if (summary.total === 0) return "none";
   if (summary.done >= summary.total) return "green";
@@ -261,6 +300,49 @@ export function isTodayWithinBlock(
   if (task.timeSemantic !== "planned") return false;
   if (!task.startTime || !task.endTime) return false;
   return task.startTime <= nowTime && nowTime < task.endTime;
+}
+
+/**
+ * 任务时间块距离当前时刻的分钟数：
+ * 正在进行 = 0；未来任务取距开始时间；已过任务取距结束时间。
+ * 没有时间信息的任务返回 Infinity，排序时放最后。
+ */
+export function minutesFromTimeBlock(
+  task: Task,
+  date: string,
+  today: string,
+  nowTime: string,
+): number {
+  if (date !== today) return Number.POSITIVE_INFINITY;
+  const now = timeToMinutes(nowTime);
+  if (now === null) return Number.POSITIVE_INFINITY;
+  if (isTodayWithinBlock(task, date, today, nowTime)) return 0;
+
+  const start = timeToMinutes(task.startTime);
+  const end = timeToMinutes(task.endTime);
+  if (start === null && end === null) return Number.POSITIVE_INFINITY;
+  if (start !== null && now < start) return start - now;
+  if (end !== null && now >= end) return now - end;
+  if (start !== null) return Math.abs(now - start);
+  if (end !== null) return Math.abs(end - now);
+  return Number.POSITIVE_INFINITY;
+}
+
+/** 即将开始：今天尚未开始，且距离开始时间不超过指定分钟数。 */
+export function isTaskStartingSoon(
+  task: Task,
+  date: string,
+  today: string,
+  nowTime: string,
+  windowMinutes = 20,
+): boolean {
+  if (date !== today || !task.startTime) return false;
+  if (isTodayWithinBlock(task, date, today, nowTime)) return false;
+  const start = timeToMinutes(task.startTime);
+  const now = timeToMinutes(nowTime);
+  if (start === null || now === null) return false;
+  const difference = start - now;
+  return difference > 0 && difference <= windowMinutes;
 }
 
 export function sortDayItems(
