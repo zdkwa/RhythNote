@@ -25,6 +25,7 @@ launch-rhythnote.cmd
 probe-rust.txt
 /RhythNote.exe
 /RhythNote节律待办
+/app/
 
 # Editor directories and files
 .vscode/*
