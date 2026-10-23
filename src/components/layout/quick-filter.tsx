@@ -29,7 +29,7 @@ export function useQuickFilter(): [TaskScope, (scope: TaskScope) => void] {
   const raw = params.get("scope");
   const scope: TaskScope = SCOPES.includes(raw as TaskScope)
     ? (raw as TaskScope)
-    : "all";
+    : "today";
   const setScope = (next: TaskScope) => {
     const updated = new URLSearchParams(params);
     if (next === "all") updated.delete("scope");

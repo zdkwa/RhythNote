@@ -3,6 +3,7 @@ import type {
   Category,
   CategoryInput,
   DailyRecord,
+  OccurrenceTimeOverride,
   Tag,
   TagInput,
   Task,
@@ -19,6 +20,7 @@ import {
   toMonthKey,
 } from "@/lib/date";
 import { expandOccurrences } from "@/lib/recurrence";
+import { reviewStageDates } from "@/domain/review";
 
 const nowIso = () => new Date().toISOString();
 
@@ -52,6 +54,7 @@ export class MemoryRepository implements Repository {
   private tasks: Task[] = [];
   private records: DailyRecord[] = [];
   private pauses: TaskPause[] = [];
+  private timeOverrides: OccurrenceTimeOverride[] = [];
   private checkinDates = new Set<string>();
   private theme: ThemeMode = "system";
 
@@ -572,6 +575,12 @@ export class MemoryRepository implements Repository {
       startTime: input.startTime || null,
       endTime: input.endTime || null,
       recurrenceRule: input.recurrenceRule || null,
+      reviewIntervals:
+        input.type === "review"
+          ? (input.reviewIntervals ?? null)
+          : null,
+      reviewAnchor:
+        input.type === "review" ? (input.reviewAnchor ?? "initial") : null,
       categoryId: category?.id ?? null,
       completedAt: null,
       isBackfilled: false,
@@ -610,6 +619,10 @@ export class MemoryRepository implements Repository {
     task.startTime = input.startTime || null;
     task.endTime = input.endTime || null;
     task.recurrenceRule = input.recurrenceRule || null;
+    task.reviewIntervals =
+      input.type === "review" ? (input.reviewIntervals ?? null) : null;
+    task.reviewAnchor =
+      input.type === "review" ? (input.reviewAnchor ?? "initial") : null;
     task.categoryId = category?.id ?? null;
     task.category = category ? cloneCategory(category) : null;
     task.tags = this.tags
@@ -675,20 +688,27 @@ export class MemoryRepository implements Repository {
       (item) => item.id === input.taskId && !item.archivedAt,
     );
     if (!task) throw new Error("任务不存在或已归档");
-    if (task.type !== "recurring") throw new Error("只有循环任务可以写每日记录");
+    if (task.type !== "recurring" && task.type !== "review") {
+      throw new Error("只有循环或复习任务可以写每日记录");
+    }
     const today = todayKey();
     if (input.recordDate > today) throw new Error("未来日期不可打卡或写备注");
     if (input.recordDate < task.taskDate) {
-      throw new Error("该日期早于循环任务开始日期");
+      throw new Error("该日期早于任务开始日期");
     }
     let dates: string[] = [];
     try {
-      dates = expandOccurrences(task, input.recordDate, input.recordDate);
+      dates =
+        task.type === "review"
+          ? reviewStageDates(task, input.recordDate, input.recordDate).map(
+              (item) => item.date,
+            )
+          : expandOccurrences(task, input.recordDate, input.recordDate);
     } catch {
-      throw new Error("循环规则异常，无法写入该日期");
+      throw new Error("循环/复习规则异常，无法写入该日期");
     }
     if (!dates.includes(input.recordDate)) {
-      throw new Error("该日期不是循环任务的发生日期");
+      throw new Error("该日期不是任务的发生日期");
     }
     if (
       this.pauses.some(
@@ -752,7 +772,9 @@ export class MemoryRepository implements Repository {
       (item) => item.id === taskId && !item.archivedAt,
     );
     if (!task) throw new Error("任务不存在或已归档");
-    if (task.type !== "recurring") throw new Error("只有循环任务可以暂停某一天");
+    if (task.type !== "recurring" && task.type !== "review") {
+      throw new Error("只有循环或复习任务可以暂停某一天");
+    }
     if (pauseDate < todayKey()) throw new Error("不能暂停过去的日期");
     let dates: string[] = [];
     try {
@@ -795,6 +817,54 @@ export class MemoryRepository implements Repository {
       (record) => record.recordDate >= beforeDate,
     );
     this.pauses = this.pauses.filter((pause) => pause.pauseDate >= beforeDate);
+    this.timeOverrides = this.timeOverrides.filter(
+      (override) => override.occurrenceDate >= beforeDate,
+    );
+  }
+
+  async listTimeOverrides(
+    startDate: string,
+    endDate: string,
+  ): Promise<OccurrenceTimeOverride[]> {
+    return this.timeOverrides
+      .filter(
+        (override) =>
+          override.occurrenceDate >= startDate &&
+          override.occurrenceDate <= endDate,
+      )
+      .map((override) => ({ ...override }));
+  }
+
+  async setTimeOverride(override: OccurrenceTimeOverride): Promise<void> {
+    const index = this.timeOverrides.findIndex(
+      (item) =>
+        item.taskId === override.taskId &&
+        item.occurrenceDate === override.occurrenceDate,
+    );
+    if (index >= 0) this.timeOverrides[index] = { ...override };
+    else this.timeOverrides.push({ ...override });
+  }
+
+  async updateTaskTimeFrom(
+    taskId: string,
+    timeSemantic: "planned" | "deadline",
+    startTime: string | null,
+    endTime: string | null,
+    fromDate: string,
+  ): Promise<void> {
+    const task = this.tasks.find((item) => item.id === taskId && !item.archivedAt);
+    if (!task) throw new Error("任务不存在或已归档");
+    if (task.type !== "review") {
+      throw new Error("只有记忆复习任务支持批量调整时间");
+    }
+    task.timeSemantic = timeSemantic;
+    task.startTime = startTime;
+    task.endTime = endTime;
+    task.updatedAt = nowIso();
+    this.timeOverrides = this.timeOverrides.filter(
+      (override) =>
+        !(override.taskId === taskId && override.occurrenceDate >= fromDate),
+    );
   }
 
   async getTheme(): Promise<ThemeMode> {

@@ -4,10 +4,8 @@ import {
   ListTodo,
   Moon,
   Plus,
-  Repeat2,
   Settings,
   Sun,
-  TimerReset,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -72,12 +70,13 @@ export function Sidebar() {
   const location = useLocation();
   const isHome = location.pathname === "/" || location.pathname.startsWith("/day/");
   const [createOpen, setCreateOpen] = useState(false);
+  const currentType = new URLSearchParams(location.search).get("type");
   const defaultType =
-    location.pathname === "/tasks/recurring"
-      ? "recurring"
-      : location.pathname === "/tasks/once"
-        ? "once"
-        : undefined;
+    currentType === "once" ||
+    currentType === "recurring" ||
+    currentType === "review"
+      ? currentType
+      : undefined;
   const defaultCategoryId = location.pathname.startsWith("/categories/")
     ? (location.pathname.split("/")[2] ?? null)
     : null;
@@ -195,15 +194,6 @@ export function Sidebar() {
           </div>
         </div>
 
-        <div>
-          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--sidebar-muted))]">
-            任务类型
-          </p>
-          <div className="space-y-1">
-            <NavItem to="/tasks/once" label="临时任务" icon={TimerReset} />
-            <NavItem to="/tasks/recurring" label="循环任务" icon={Repeat2} />
-          </div>
-        </div>
       </nav>
 
       <div className="mt-4 space-y-2 border-t border-white/8 pt-4">

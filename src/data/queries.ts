@@ -13,6 +13,7 @@ import type {
   Task,
   TaskInput,
   ThemeMode,
+  OccurrenceTimeOverride,
 } from "@/types/domain";
 import type { DailyRecordInput } from "@/data/repository";
 
@@ -23,6 +24,8 @@ export const keys = {
   records: (start: string, end: string) => ["records", start, end] as const,
   pauses: (start: string, end: string) => ["pauses", start, end] as const,
   checkinDays: ["checkin-days"] as const,
+  timeOverrides: (start: string, end: string) =>
+    ["time-overrides", start, end] as const,
   archive: ["archive"] as const,
   calendar: (month: string) => ["calendar", month] as const,
   day: (date: string) => ["day", date] as const,
@@ -74,10 +77,23 @@ export function useCheckinDays() {
   });
 }
 
+export function useTimeOverrides(
+  start: string,
+  end: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: keys.timeOverrides(start, end),
+    queryFn: () => repository.listTimeOverrides(start, end),
+    enabled: enabled && Boolean(start && end),
+  });
+}
+
 export interface WorkspaceBundle {
   tasks: Task[];
   records: DailyRecord[];
   pauses: Array<{ taskId: string; pauseDate: string }>;
+  timeOverrides: OccurrenceTimeOverride[];
   isLoading: boolean;
   isError: boolean;
   error: unknown;
@@ -92,18 +108,32 @@ export function useWorkspaceBundle(
   const tasksQuery = useTasks(includeArchived);
   const recordsQuery = useRecords(start, end);
   const pausesQuery = usePauses(start, end);
+  const timeOverridesQuery = useTimeOverrides(start, end);
   return {
     tasks: tasksQuery.data ?? [],
     records: recordsQuery.data ?? [],
     pauses: pausesQuery.data ?? [],
+    timeOverrides: timeOverridesQuery.data ?? [],
     isLoading:
-      tasksQuery.isLoading || recordsQuery.isLoading || pausesQuery.isLoading,
-    isError: tasksQuery.isError || recordsQuery.isError || pausesQuery.isError,
-    error: tasksQuery.error ?? recordsQuery.error ?? pausesQuery.error,
+      tasksQuery.isLoading ||
+      recordsQuery.isLoading ||
+      pausesQuery.isLoading ||
+      timeOverridesQuery.isLoading,
+    isError:
+      tasksQuery.isError ||
+      recordsQuery.isError ||
+      pausesQuery.isError ||
+      timeOverridesQuery.isError,
+    error:
+      tasksQuery.error ??
+      recordsQuery.error ??
+      pausesQuery.error ??
+      timeOverridesQuery.error,
     refetch: () => {
       void tasksQuery.refetch();
       void recordsQuery.refetch();
       void pausesQuery.refetch();
+      void timeOverridesQuery.refetch();
     },
   };
 }
@@ -187,6 +217,40 @@ export function useRemovePause() {
       taskId: string;
       pauseDate: string;
     }) => repository.removePause(taskId, pauseDate),
+    onSuccess: invalidateRecordsAndCalendar,
+  });
+}
+
+export function useSetTimeOverride() {
+  return useMutation({
+    mutationFn: (override: OccurrenceTimeOverride) =>
+      repository.setTimeOverride(override),
+    onSuccess: invalidateRecordsAndCalendar,
+  });
+}
+
+export function useUpdateTaskTimeFrom() {
+  return useMutation({
+    mutationFn: ({
+      taskId,
+      timeSemantic,
+      startTime,
+      endTime,
+      fromDate,
+    }: {
+      taskId: string;
+      timeSemantic: "planned" | "deadline";
+      startTime: string | null;
+      endTime: string | null;
+      fromDate: string;
+    }) =>
+      repository.updateTaskTimeFrom(
+        taskId,
+        timeSemantic,
+        startTime,
+        endTime,
+        fromDate,
+      ),
     onSuccess: invalidateRecordsAndCalendar,
   });
 }

@@ -1,4 +1,5 @@
-export type TaskType = "once" | "recurring";
+export type TaskType = "once" | "recurring" | "review";
+export type ReviewAnchor = "initial" | "previous";
 export type Priority = "high" | "medium" | "low";
 export type TimeSemantic = "planned" | "deadline";
 export type RecordStatus = "done" | "undone";
@@ -34,6 +35,8 @@ export interface Task {
   startTime: string | null;
   endTime: string | null;
   recurrenceRule: string | null;
+  reviewIntervals?: number[] | null;
+  reviewAnchor?: ReviewAnchor | null;
   categoryId: string | null;
   completedAt: string | null;
   isBackfilled: boolean;
@@ -54,6 +57,8 @@ export interface TaskInput {
   startTime?: string | null;
   endTime?: string | null;
   recurrenceRule?: string | null;
+  reviewIntervals?: number[] | null;
+  reviewAnchor?: ReviewAnchor | null;
   categoryId?: string | null;
   tagIds: string[];
 }
@@ -74,6 +79,15 @@ export interface TaskPause {
   taskId: string;
   pauseDate: string;
   createdAt: string;
+}
+
+export interface OccurrenceTimeOverride {
+  taskId: string;
+  occurrenceDate: string;
+  timeSemantic: TimeSemantic;
+  startTime: string | null;
+  endTime: string | null;
+  updatedAt: string;
 }
 
 export interface Occurrence {
@@ -138,6 +152,7 @@ export interface OccurrenceWithStatus {
   isBackfilled: boolean;
   isPaused: boolean;
   isArchived: boolean;
+  reviewStage?: number | null;
 }
 
 export const PRIORITY_ORDER: Record<Priority, number> = {
@@ -155,6 +170,7 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
 export const TYPE_LABEL: Record<TaskType, string> = {
   once: "临时",
   recurring: "循环",
+  review: "复习",
 };
 
 export const TIME_SEMANTIC_LABEL: Record<TimeSemantic, string> = {

@@ -10,6 +10,11 @@ import {
   timestampToDateKey,
 } from "@/lib/date";
 import { expandOccurrences } from "@/lib/recurrence";
+import { expandReviewDates, reviewStageForDate } from "@/domain/review";
+import {
+  taskAtDate,
+  type TimeOverrideMap,
+} from "@/domain/time-overrides";
 
 interface CollectInput {
   tasks: Task[];
@@ -17,6 +22,7 @@ interface CollectInput {
   pauses: TaskPause[];
   start: string;
   end: string;
+  overrides?: TimeOverrideMap;
 }
 
 export function collectOccurrences({
@@ -25,6 +31,7 @@ export function collectOccurrences({
   pauses,
   start,
   end,
+  overrides,
 }: CollectInput): OccurrenceWithStatus[] {
   const recordsByKey = new Map<string, DailyRecord>();
   for (const record of records) {
@@ -41,7 +48,7 @@ export function collectOccurrences({
       if (task.taskDate < start || task.taskDate > end) continue;
       const record = recordsByKey.get(`${task.id}|${task.taskDate}`) ?? null;
       items.push({
-        task,
+        task: taskAtDate(task, task.taskDate, overrides),
         date: task.taskDate,
         record,
         isBackfilled: task.isBackfilled,
@@ -52,7 +59,10 @@ export function collectOccurrences({
     }
     let dates: string[] = [];
     try {
-      dates = expandOccurrences(task, start, end);
+      dates =
+        task.type === "review"
+          ? expandReviewDates(task, start, end)
+          : expandOccurrences(task, start, end);
     } catch {
       continue;
     }
@@ -62,12 +72,14 @@ export function collectOccurrences({
       const key = `${task.id}|${date}`;
       const record = recordsByKey.get(key) ?? null;
       items.push({
-        task,
+        task: taskAtDate(task, date, overrides),
         date,
         record,
         isBackfilled: Boolean(record?.isBackfilled),
         isPaused: pauseKeys.has(key),
         isArchived: false,
+        reviewStage:
+          task.type === "review" ? reviewStageForDate(task, date) : null,
       });
     }
   }
@@ -82,6 +94,7 @@ export function collectOverdue(
   today: string,
   lookbackDays = 30,
   currentTime = nowTimeKey(),
+  overrides?: TimeOverrideMap,
 ): OccurrenceWithStatus[] {
   const start = addDaysKey(today, -lookbackDays);
   const daily = collectOccurrences({
@@ -90,9 +103,12 @@ export function collectOverdue(
     pauses,
     start,
     end: today,
+    overrides,
   });
   const activeRecurring = daily.filter((item) => {
-    if (item.task.type !== "recurring") return false;
+    if (item.task.type !== "recurring" && item.task.type !== "review") {
+      return false;
+    }
     if (item.isPaused) return false;
     if (item.record?.status === "done") return false;
     return item.date < today;

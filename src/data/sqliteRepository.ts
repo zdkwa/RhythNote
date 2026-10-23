@@ -12,10 +12,13 @@ import type {
   TaskInput,
   TaskPause,
   ThemeMode,
+  OccurrenceTimeOverride,
+  ReviewAnchor,
 } from "@/types/domain";
 import { uuid } from "@/lib/utils";
 import { todayKey } from "@/lib/date";
 import { expandOccurrences } from "@/lib/recurrence";
+import { reviewStageDates } from "@/domain/review";
 
 interface CategoryRow {
   id: string;
@@ -46,6 +49,8 @@ interface TaskRow {
   start_time: string | null;
   end_time: string | null;
   recurrence_rule: string | null;
+  review_intervals: string | null;
+  review_anchor: string | null;
   category_id: string | null;
   completed_at: string | null;
   is_backfilled: number;
@@ -70,6 +75,38 @@ interface PauseRow {
   task_id: string;
   pause_date: string;
   created_at: string;
+}
+
+interface TimeOverrideRow {
+  task_id: string;
+  occurrence_date: string;
+  time_semantic: "planned" | "deadline";
+  start_time: string | null;
+  end_time: string | null;
+  updated_at: string;
+}
+
+function parseReviewIntervals(value: string | null): number[] | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is number => typeof item === "number")
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function mapTimeOverride(row: TimeOverrideRow): OccurrenceTimeOverride {
+  return {
+    taskId: row.task_id,
+    occurrenceDate: row.occurrence_date,
+    timeSemantic: row.time_semantic,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    updatedAt: row.updated_at,
+  };
 }
 
 interface TagLinkRow extends TagRow {
@@ -129,13 +166,18 @@ function mapTask(
     id: row.id,
     title: row.title,
     description: row.description,
-    type: row.type,
+    type: row.review_intervals ? "review" : row.type,
     priority: row.priority,
     timeSemantic: row.time_semantic,
     taskDate: row.task_date,
     startTime: row.start_time,
     endTime: row.end_time,
     recurrenceRule: row.recurrence_rule,
+    reviewIntervals: parseReviewIntervals(row.review_intervals),
+    reviewAnchor:
+      row.review_anchor === "previous" || row.review_anchor === "initial"
+        ? (row.review_anchor as ReviewAnchor)
+        : null,
     categoryId: row.category_id,
     completedAt: row.completed_at,
     isBackfilled: row.is_backfilled === 1,
@@ -308,8 +350,17 @@ export class SqliteRepository implements Repository {
   }
 
   private assertOccurrence(task: Task, date: string): void {
+    if (task.type === "review") {
+      if (date < task.taskDate) {
+        throw new Error("该日期早于首次学习日期");
+      }
+      if (!reviewStageDates(task, date, date).length) {
+        throw new Error("该日期不是复习计划中的日期");
+      }
+      return;
+    }
     if (task.type !== "recurring" || !task.recurrenceRule) {
-      throw new Error("只有循环任务可以写入每日记录");
+      throw new Error("只有循环或复习任务可以写入每日记录");
     }
     if (date < task.taskDate) {
       throw new Error("该日期早于循环任务开始日期");
@@ -341,23 +392,29 @@ export class SqliteRepository implements Repository {
     const db = await getDb();
     const now = new Date().toISOString();
     const id = uuid();
+    const isReview = input.type === "review";
     await db.execute(
       `INSERT INTO tasks (
         id, title, description, type, priority, time_semantic, task_date,
-        start_time, end_time, recurrence_rule, category_id, completed_at,
-        is_backfilled, archived_at, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, 0, NULL, $12, $12)`,
+        start_time, end_time, recurrence_rule, review_intervals, review_anchor,
+        category_id, completed_at, is_backfilled, archived_at, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULL, 0, NULL, $14, $14)`,
       [
         id,
         input.title.trim(),
         input.description?.trim() || null,
-        input.type,
+        // review 在 SQLite 里沿用 once，领域层通过 review_intervals 映射为 review。
+        isReview ? "once" : input.type,
         input.priority,
         input.timeSemantic,
         input.taskDate,
         input.startTime || null,
         input.endTime || null,
         input.recurrenceRule || null,
+        isReview && input.reviewIntervals?.length
+          ? JSON.stringify(input.reviewIntervals)
+          : null,
+        isReview ? (input.reviewAnchor ?? "initial") : null,
         input.categoryId || null,
         now,
       ],
@@ -389,8 +446,9 @@ export class SqliteRepository implements Repository {
       `UPDATE tasks SET
         title = $1, description = $2, priority = $3, time_semantic = $4,
         task_date = $5, start_time = $6, end_time = $7, recurrence_rule = $8,
-        category_id = $9, updated_at = $10
-      WHERE id = $11 AND archived_at IS NULL`,
+        review_intervals = $9, review_anchor = $10, category_id = $11,
+        updated_at = $12
+      WHERE id = $13 AND archived_at IS NULL`,
       [
         input.title.trim(),
         input.description?.trim() || null,
@@ -400,6 +458,10 @@ export class SqliteRepository implements Repository {
         input.startTime || null,
         input.endTime || null,
         input.recurrenceRule || null,
+        input.type === "review" && input.reviewIntervals?.length
+          ? JSON.stringify(input.reviewIntervals)
+          : null,
+        input.type === "review" ? (input.reviewAnchor ?? "initial") : null,
         input.categoryId || null,
         now,
         id,
@@ -427,7 +489,7 @@ export class SqliteRepository implements Repository {
   ): Promise<void> {
     const task = await this.requireActiveTask(id);
     if (task.type !== "once") {
-      throw new Error("循环任务请使用每日记录完成");
+      throw new Error("循环/复习任务请使用每日记录完成");
     }
     const today = todayKey();
     if (task.taskDate > today) {
@@ -557,8 +619,8 @@ export class SqliteRepository implements Repository {
 
   async addPause(taskId: string, pauseDate: string): Promise<void> {
     const task = await this.requireActiveTask(taskId);
-    if (task.type !== "recurring") {
-      throw new Error("只有循环任务可以暂停某一天");
+    if (task.type !== "recurring" && task.type !== "review") {
+      throw new Error("只有循环或复习任务可以暂停某一天");
     }
     if (pauseDate < todayKey()) {
       throw new Error("不能暂停过去的日期");
@@ -614,6 +676,68 @@ export class SqliteRepository implements Repository {
     await db.execute(
       "DELETE FROM task_pauses WHERE pause_date < $1",
       [beforeDate],
+    );
+    await db.execute(
+      "DELETE FROM occurrence_time_overrides WHERE occurrence_date < $1",
+      [beforeDate],
+    );
+  }
+
+  async listTimeOverrides(
+    startDate: string,
+    endDate: string,
+  ): Promise<OccurrenceTimeOverride[]> {
+    const db = await getDb();
+    const rows = await db.select<TimeOverrideRow[]>(
+      "SELECT * FROM occurrence_time_overrides WHERE occurrence_date BETWEEN $1 AND $2 ORDER BY occurrence_date ASC",
+      [startDate, endDate],
+    );
+    return rows.map(mapTimeOverride);
+  }
+
+  async setTimeOverride(override: OccurrenceTimeOverride): Promise<void> {
+    const db = await getDb();
+    await db.execute(
+      `INSERT INTO occurrence_time_overrides (
+        task_id, occurrence_date, time_semantic, start_time, end_time, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT(task_id, occurrence_date) DO UPDATE SET
+        time_semantic = excluded.time_semantic,
+        start_time = excluded.start_time,
+        end_time = excluded.end_time,
+        updated_at = excluded.updated_at`,
+      [
+        override.taskId,
+        override.occurrenceDate,
+        override.timeSemantic,
+        override.startTime,
+        override.endTime,
+        override.updatedAt,
+      ],
+    );
+  }
+
+  async updateTaskTimeFrom(
+    taskId: string,
+    timeSemantic: "planned" | "deadline",
+    startTime: string | null,
+    endTime: string | null,
+    fromDate: string,
+  ): Promise<void> {
+    const task = await this.requireActiveTask(taskId);
+    if (task.type !== "review") {
+      throw new Error("只有记忆复习任务支持批量调整时间");
+    }
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.execute(
+      `UPDATE tasks SET time_semantic = $1, start_time = $2, end_time = $3,
+       updated_at = $4 WHERE id = $5 AND archived_at IS NULL`,
+      [timeSemantic, startTime, endTime, now, taskId],
+    );
+    await db.execute(
+      "DELETE FROM occurrence_time_overrides WHERE task_id = $1 AND occurrence_date >= $2",
+      [taskId, fromDate],
     );
   }
 

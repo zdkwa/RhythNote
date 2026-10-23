@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  BookOpenCheck,
   CalendarDays,
   FolderKanban,
   ListTodo,
@@ -11,6 +12,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/layout/page-header";
 import { QuickFilter, useQuickFilter } from "@/components/layout/quick-filter";
+import {
+  TaskTypeFilter,
+  useTaskTypeFilter,
+} from "@/components/layout/task-type-filter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -38,11 +43,11 @@ import {
   collectOverdue,
   occurrenceDone,
 } from "@/domain/occurrences";
+import { buildTimeOverrideMap } from "@/domain/time-overrides";
 import type {
   OccurrenceWithStatus,
   Task,
   TaskScope,
-  TaskType,
   TaskWithStatus,
 } from "@/types/domain";
 
@@ -50,9 +55,9 @@ const PAGE_SIZE = 100;
 
 const SCOPE_DESCRIPTION: Record<TaskScope, string> = {
   all: "全部视图只展示任务定义，不展开无限发生实例。可按全部 / 今天 / 本周 / 逾期切换。",
-  today: "今天发生的循环实例与今天的一次性任务；过去完成的项会自动记为补做。",
+  today: "今天发生的循环/复习实例与今天的一次性任务；过去完成的项会自动记为补做。",
   week: "本周一至周日按日分组；过去日期可补做，未来日期只读。",
-  overdue: "今天之前漏掉的任务。循环任务只回看最近 30 天，一次性任务回看全部历史。",
+  overdue: "今天之前漏掉的任务。循环/复习任务只回看最近 30 天，一次性任务回看全部历史。",
 };
 
 function CardListSkeleton() {
@@ -65,9 +70,10 @@ function CardListSkeleton() {
   );
 }
 
-export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
+export function TasksPage() {
   const { categoryId } = useParams();
   const [scope, setScope] = useQuickFilter();
+  const [type, setType] = useTaskTypeFilter();
   const today = useToday();
   const clock = useClock(60_000);
   const nowTime = nowTimeKey(clock);
@@ -107,7 +113,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [scope, fixedType, categoryId]);
+  }, [scope, type, categoryId]);
 
   const category = categoryId
     ? (categories.find((item) => item.id === categoryId) ?? null)
@@ -117,11 +123,11 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
   const filteredTasks = useMemo(
     () =>
       bundle.tasks.filter((task) => {
-        if (fixedType && task.type !== fixedType) return false;
+        if (type !== "all" && task.type !== type) return false;
         if (categoryId && task.categoryId !== categoryId) return false;
         return true;
       }),
-    [bundle.tasks, fixedType, categoryId],
+    [bundle.tasks, type, categoryId],
   );
 
   const recordByKey = useMemo(() => {
@@ -139,6 +145,10 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
     }
     return set;
   }, [pauses]);
+  const timeOverrides = useMemo(
+    () => buildTimeOverrideMap(bundle.timeOverrides),
+    [bundle.timeOverrides],
+  );
 
   const definitions = useMemo<TaskWithStatus[]>(() => {
     if (scope !== "all") return [];
@@ -162,6 +172,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
       pauses,
       start: range.start,
       end: range.end,
+      overrides: timeOverrides,
     }).filter((item) => !item.isPaused);
     return sortOccurrences(items, today, nowTime);
   }, [
@@ -169,6 +180,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
     filteredTasks,
     bundle.records,
     pauses,
+    timeOverrides,
     range.start,
     range.end,
     today,
@@ -193,6 +205,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
         today,
         30,
         nowTime,
+        timeOverrides,
       ),
       nowTime,
     );
@@ -201,31 +214,16 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
     filteredTasks,
     bundle.records,
     pauses,
+    timeOverrides,
     today,
     nowTime,
   ]);
 
-  const title = category
-    ? category.name
-    : fixedType === "once"
-      ? "临时任务"
-      : fixedType === "recurring"
-        ? "循环任务"
-        : "全部任务";
-  const eyebrow = category
-    ? "Categories / Tasks"
-    : fixedType === "once"
-      ? "Tasks / Once"
-      : fixedType === "recurring"
-        ? "Tasks / Recurring"
-        : "Tasks / Library";
+  const title = category ? category.name : "全部任务";
+  const eyebrow = category ? "Categories / Tasks" : "Tasks / Library";
   const description = category
     ? `分类「${category.name}」下的任务定义与发生实例；只显示未归档任务。`
     : SCOPE_DESCRIPTION[scope];
-
-  const categoryTaskCount = categoryId
-    ? bundle.tasks.filter((task) => task.categoryId === categoryId).length
-    : 0;
 
   if (categoryMissing) {
     return (
@@ -260,7 +258,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
   );
 
   const renderEmpty = () => {
-    if (fixedType === "once") {
+    if (type === "once") {
       return (
         <EmptyState
           icon={TimerReset}
@@ -270,12 +268,22 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
         />
       );
     }
-    if (fixedType === "recurring") {
+    if (type === "recurring") {
       return (
         <EmptyState
           icon={Repeat2}
           title={category ? "这个分类下还没有循环任务" : "还没有循环任务"}
           description="用规则描述重复，例如每个工作日 09:00–10:00；创建后不会预生成任何每日记录。"
+          action={emptyAction}
+        />
+      );
+    }
+    if (type === "review") {
+      return (
+        <EmptyState
+          icon={BookOpenCheck}
+          title={category ? "这个分类下还没有记忆复习" : "还没有记忆复习"}
+          description="设置首次学习日期和复习间隔，按艾宾浩斯曲线安排复习；不会预生成任何记录。"
           action={emptyAction}
         />
       );
@@ -532,29 +540,13 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
         eyebrow={eyebrow}
         title={title}
         description={description}
-        actions={<QuickFilter value={scope} onChange={setScope} />}
-      />
-
-      {category ? (
-        <div className="paper-panel flex flex-wrap items-center gap-3 rounded-xl px-4 py-3">
-          <span
-            className="h-3 w-3 rounded-full ring-2 ring-black/5 dark:ring-white/10"
-            style={{ backgroundColor: category.color }}
-          />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">分类：{category.name}</p>
-            <p className="text-[11px] text-muted-foreground">
-              {categoryTaskCount} 个未归档任务 · 归档任务不在分类页展示
-            </p>
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <TaskTypeFilter value={type} onChange={setType} />
+            <QuickFilter value={scope} onChange={setScope} />
           </div>
-          <Button variant="outline" size="sm" className="ml-auto" asChild>
-            <Link to="/settings/categories">
-              <FolderKanban className="h-3.5 w-3.5" />
-              管理分类
-            </Link>
-          </Button>
-        </div>
-      ) : null}
+        }
+      />
 
       {renderBody()}
 
@@ -563,7 +555,7 @@ export function TasksPage({ fixedType }: { fixedType?: TaskType }) {
         onOpenChange={handleEditorOpenChange}
         task={editingTask}
         defaultDate={today}
-        defaultType={fixedType}
+        defaultType={type === "all" ? undefined : type}
         defaultCategoryId={categoryId ?? null}
       />
     </div>

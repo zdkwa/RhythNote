@@ -1,7 +1,9 @@
 import {
   Archive,
+  BookOpenCheck,
   CalendarDays,
   Check,
+  Clock3,
   MoreHorizontal,
   PauseCircle,
   Pencil,
@@ -46,6 +48,12 @@ import {
   type InlineNoteHandle,
 } from "@/features/records/inline-note";
 import { formatRuleSummary, probeTaskOccurrence } from "@/features/tasks/recurrence-rule";
+import {
+  reviewPlanLabel,
+  reviewStageForDate,
+  reviewStageLabel,
+} from "@/domain/review";
+import { TimeAdjustDialog } from "@/features/day/time-adjust-dialog";
 import { dateLabel, shortDateLabel, timeRangeLabel, weekdayShort } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import {
@@ -98,6 +106,8 @@ function TypeBadge({ type }: { type: Task["type"] }) {
     <Badge variant="secondary" className="gap-1">
       {type === "recurring" ? (
         <Repeat2 className="h-3 w-3" />
+      ) : type === "review" ? (
+        <BookOpenCheck className="h-3 w-3" />
       ) : (
         <TimerReset className="h-3 w-3" />
       )}
@@ -176,7 +186,10 @@ function DefinitionStatusBadge({
     );
   }
 
-  const probe = probeTaskOccurrence(task, today);
+  const probe =
+    task.type === "review"
+      ? { occurs: reviewStageForDate(task, today) !== null, broken: false }
+      : probeTaskOccurrence(task, today);
   if (probe.broken) {
     return (
       <StatusBadge status={{ label: "规则异常", variant: "destructive" }} />
@@ -289,6 +302,7 @@ function ActionMenu({
   pauseLabel,
   onPause,
   onResume,
+  onAdjustTime,
   onArchive,
 }: {
   archived: boolean;
@@ -297,6 +311,7 @@ function ActionMenu({
   pauseLabel?: string;
   onPause?: () => void;
   onResume?: () => void;
+  onAdjustTime?: () => void;
   onArchive: () => void;
 }) {
   return (
@@ -335,6 +350,12 @@ function ActionMenu({
             取消暂停
           </DropdownMenuItem>
         ) : null}
+        {onAdjustTime ? (
+          <DropdownMenuItem disabled={archived} onSelect={onAdjustTime}>
+            <Clock3 className="h-3.5 w-3.5" />
+            调整本次时间
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={archived}
@@ -363,7 +384,9 @@ function DefinitionCard({ task, today, nowTime, onEdit }: DefinitionCardProps) {
   const probe =
     task.type === "recurring"
       ? probeTaskOccurrence(task, today)
-      : { occurs: false, broken: false };
+      : task.type === "review"
+        ? { occurs: reviewStageForDate(task, today) !== null, broken: false }
+        : { occurs: false, broken: false };
   const future = task.taskDate > today;
   const overdue = isTaskOverdue(
     task,
@@ -374,12 +397,15 @@ function DefinitionCard({ task, today, nowTime, onEdit }: DefinitionCardProps) {
   );
 
   const canPauseToday =
-    task.type === "recurring" &&
+    (task.type === "recurring" || task.type === "review") &&
     !archived &&
     probe.occurs &&
     !task.todayPaused &&
     !task.todayRecord;
-  const canResumeToday = task.type === "recurring" && !archived && task.todayPaused;
+  const canResumeToday =
+    (task.type === "recurring" || task.type === "review") &&
+    !archived &&
+    task.todayPaused;
 
   const handleToggleOnce = async () => {
     if (task.type !== "once" || archived) return;
@@ -453,6 +479,8 @@ function DefinitionCard({ task, today, nowTime, onEdit }: DefinitionCardProps) {
         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/80 bg-muted/35 text-muted-foreground">
           {task.type === "recurring" ? (
             <Repeat2 className="h-4 w-4" />
+          ) : task.type === "review" ? (
+            <BookOpenCheck className="h-4 w-4" />
           ) : (
             <CalendarDays className="h-4 w-4" />
           )}
@@ -478,28 +506,35 @@ function DefinitionCard({ task, today, nowTime, onEdit }: DefinitionCardProps) {
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="h-3 w-3" />
-              {task.type === "once"
-                ? `${dateLabel(task.taskDate)} · ${timeRangeLabel(
+              {task.type === "recurring"
+                ? timeRangeLabel(task.startTime, task.endTime, "planned")
+                : `${dateLabel(task.taskDate)} · ${timeRangeLabel(
                     task.startTime,
                     task.endTime,
                     task.timeSemantic,
-                  )}`
-                : timeRangeLabel(task.startTime, task.endTime, "planned")}
+                  )}`}
             </span>
             {task.type === "recurring" ? (
               <span className="inline-flex items-center gap-1">
                 <Repeat2 className="h-3 w-3" />
                 {formatRuleSummary(task.recurrenceRule)}
               </span>
+            ) : task.type === "review" ? (
+              <span className="inline-flex items-center gap-1">
+                <BookOpenCheck className="h-3 w-3" />
+                {reviewPlanLabel(task)}
+              </span>
             ) : null}
             <CategoryChip category={task.category} />
           </div>
 
-          {task.type === "recurring" ? (
+          {task.type === "recurring" || task.type === "review" ? (
             <p className="mt-1 text-[11px] text-muted-foreground">
               {task.nextOccurrence
                 ? `下次发生：${dateLabel(task.nextOccurrence)}`
-                : "系列已结束（历史记录仍保留）"}
+                : task.type === "review"
+                  ? "复习计划已结束（历史记录仍保留）"
+                  : "系列已结束（历史记录仍保留）"}
             </p>
           ) : null}
 
@@ -587,6 +622,7 @@ function OccurrenceCard({
 
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
+  const [timeAdjustOpen, setTimeAdjustOpen] = useState(false);
 
   const latestRecord = (): DailyRecord | null => {
     const cached = queryClient.getQueryData<DailyRecord[]>(
@@ -739,7 +775,7 @@ function OccurrenceCard({
   };
 
   const canPause =
-    task.type === "recurring" &&
+    (task.type === "recurring" || task.type === "review") &&
     date >= today &&
     !isArchived &&
     !isPaused &&
@@ -764,6 +800,15 @@ function OccurrenceCard({
             {task.type === "once" ? (
               <PriorityBadge priority={task.priority} />
             ) : null}
+            {task.type === "review" && item.reviewStage != null ? (
+              <Badge variant="accent" className="gap-1">
+                <BookOpenCheck className="h-3 w-3" />
+                {reviewStageLabel(
+                  item.reviewStage,
+                  task.reviewIntervals?.length ?? 0,
+                )}
+              </Badge>
+            ) : null}
             <StatusBadge status={status} />
             {backfilled ? <Badge variant="backfill">补做</Badge> : null}
             {isArchived ? <Badge variant="archived">已归档</Badge> : null}
@@ -778,6 +823,11 @@ function OccurrenceCard({
               <span className="inline-flex items-center gap-1">
                 <Repeat2 className="h-3 w-3" />
                 {formatRuleSummary(task.recurrenceRule)}
+              </span>
+            ) : task.type === "review" ? (
+              <span className="inline-flex items-center gap-1">
+                <BookOpenCheck className="h-3 w-3" />
+                {reviewPlanLabel(task)}
               </span>
             ) : null}
             <CategoryChip category={task.category} />
@@ -813,11 +863,16 @@ function OccurrenceCard({
           pauseLabel={canPause ? (date === today ? "暂停今天" : "暂停本次") : undefined}
           onPause={canPause ? () => setPauseOpen(true) : undefined}
           onResume={isPaused && !isArchived ? () => void handleResume() : undefined}
+          onAdjustTime={
+            task.type === "review" && !isArchived
+              ? () => setTimeAdjustOpen(true)
+              : undefined
+          }
           onArchive={() => setArchiveOpen(true)}
         />
       </div>
 
-      {task.type === "recurring" &&
+      {(task.type === "recurring" || task.type === "review") &&
       !isPaused &&
       !isArchived &&
       !future ? (
@@ -830,6 +885,15 @@ function OccurrenceCard({
             placeholder="添加当日备注…"
           />
         </div>
+      ) : null}
+
+      {task.type === "review" ? (
+        <TimeAdjustDialog
+          open={timeAdjustOpen}
+          onOpenChange={setTimeAdjustOpen}
+          task={task}
+          date={date}
+        />
       ) : null}
 
       <ConfirmDialog

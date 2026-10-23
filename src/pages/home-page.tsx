@@ -46,6 +46,7 @@ import { MonthCalendar } from "@/features/calendar/month-calendar";
 import { MonthToolbar } from "@/features/calendar/month-toolbar";
 import { toTaskPauses } from "@/features/records/pause-utils";
 import { QueryErrorBar } from "@/features/records/query-error-bar";
+import { buildTimeOverrideMap } from "@/domain/time-overrides";
 import { cn } from "@/lib/utils";
 
 function StatCard({
@@ -201,7 +202,15 @@ function DashboardTaskRow({
               {item.task.category.name}
             </span>
           ) : null}
-          {isOnce ? <Badge variant="outline" className="px-1.5 py-0 text-[9px]">临时</Badge> : null}
+          {isOnce ? (
+            <Badge variant="outline" className="px-1.5 py-0 text-[9px]">
+              临时
+            </Badge>
+          ) : item.task.type === "review" ? (
+            <Badge variant="accent" className="px-1.5 py-0 text-[9px]">
+              复习
+            </Badge>
+          ) : null}
           {doing ? (
             <Badge variant="done" className="px-1.5 py-0 text-[9px]">
               正在做
@@ -282,6 +291,10 @@ export function HomePage() {
     () => toTaskPauses(todayBundle.pauses),
     [todayBundle.pauses],
   );
+  const todayOverrides = useMemo(
+    () => buildTimeOverrideMap(todayBundle.timeOverrides),
+    [todayBundle.timeOverrides],
+  );
   const todaySummary = useMemo(
     () =>
       buildDaySummary(
@@ -289,8 +302,9 @@ export function HomePage() {
         todayBundle.tasks,
         todayBundle.records,
         todayPauses,
+        todayOverrides,
       ),
-    [today, todayBundle.tasks, todayBundle.records, todayPauses],
+    [today, todayBundle.tasks, todayBundle.records, todayPauses, todayOverrides],
   );
 
   const grid = useMemo(() => monthGridRange(monthKey), [monthKey]);
@@ -298,6 +312,10 @@ export function HomePage() {
   const monthPauses = useMemo(
     () => toTaskPauses(monthBundle.pauses),
     [monthBundle.pauses],
+  );
+  const monthOverrides = useMemo(
+    () => buildTimeOverrideMap(monthBundle.timeOverrides),
+    [monthBundle.timeOverrides],
   );
   const summaries = useMemo(
     () =>
@@ -307,11 +325,13 @@ export function HomePage() {
         pauses: monthPauses,
         start: grid.start,
         end: grid.end,
+        overrides: monthOverrides,
       }),
     [
       monthBundle.tasks,
       monthBundle.records,
       monthPauses,
+      monthOverrides,
       grid.start,
       grid.end,
     ],
@@ -325,7 +345,7 @@ export function HomePage() {
         .filter(
           (item) =>
             item.kind === "scheduled" &&
-            item.task.type === "recurring" &&
+            (item.task.type === "recurring" || item.task.type === "review") &&
             !item.isPaused &&
             !isItemDone(item),
         )
@@ -508,7 +528,7 @@ export function HomePage() {
                     循环任务
                   </h2>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    正在做优先，其余按距离当前时间从近到远，最多展示 2 项
+                    循环与记忆复习，正在做优先，最多展示 2 项
                   </p>
                 </div>
                 <Badge variant="outline" className="gap-1">
@@ -525,7 +545,7 @@ export function HomePage() {
               ) : loopItems.length === 0 ? (
                 <div className="mt-3 flex items-center gap-3 rounded-xl border border-dashed border-border/80 px-3 py-4 text-sm text-muted-foreground">
                   <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-                  <span>今天没有未完成的循环任务。</span>
+                  <span>今天没有未完成的循环 / 复习任务。</span>
                 </div>
               ) : (
                 <div className="mt-3 space-y-2">
@@ -544,10 +564,10 @@ export function HomePage() {
 
               {loopUnfinishedItems.length > loopItems.length ? (
                 <Link
-                  to="/tasks/recurring"
+                  to="/tasks?scope=today"
                   className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                 >
-                  还有 {loopUnfinishedItems.length - loopItems.length} 项循环任务，查看全部
+                  还有 {loopUnfinishedItems.length - loopItems.length} 项循环 / 复习任务，查看全部
                   <ArrowRight className="h-3 w-3" />
                 </Link>
               ) : null}
@@ -593,7 +613,7 @@ export function HomePage() {
 
               {temporaryUnfinishedItems.length > temporaryItems.length ? (
                 <Link
-                  to="/tasks/once"
+                  to="/tasks?type=once&scope=today"
                   className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                 >
                   还有 {temporaryUnfinishedItems.length - temporaryItems.length} 项临时任务，查看全部

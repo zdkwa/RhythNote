@@ -58,11 +58,17 @@ import {
   PRIORITY_LABEL,
   TYPE_LABEL,
   type Priority,
+  type ReviewAnchor,
   type Task,
   type TaskInput,
   type TaskType,
   type TimeSemantic,
 } from "@/types/domain";
+import { ReviewPlanEditor } from "@/features/tasks/review-plan-editor";
+import {
+  REVIEW_PRESETS,
+  normalizeReviewIntervals,
+} from "@/domain/review";
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const NAME_MAX = 20;
@@ -75,7 +81,7 @@ const taskFormSchema = z
       .min(1, "请输入任务标题")
       .max(200, "标题不能超过 200 个字符"),
     description: z.string().max(2000, "说明不能超过 2000 个字符"),
-    type: z.enum(["once", "recurring"]),
+    type: z.enum(["once", "recurring", "review"]),
     priority: z.enum(["high", "medium", "low"]),
     timeSemantic: z.enum(["planned", "deadline"]),
     taskDate: z.string().refine(isValidDateKey, "请选择有效的日期"),
@@ -149,7 +155,7 @@ export interface TaskEditorDialogProps {
   defaultDate?: string;
   /** 从分类页新建时预选分类。 */
   defaultCategoryId?: string | null;
-  /** 从 /tasks/once 或 /tasks/recurring 新建时预选类型。 */
+  /** 从 /tasks/once、/tasks/recurring 或 /tasks/review 新建时预选类型。 */
   defaultType?: TaskType;
 }
 
@@ -174,8 +180,14 @@ function createDefaults(
     title: task?.title ?? "",
     description: task?.description ?? "",
     type,
-    priority: type === "recurring" ? "medium" : (task?.priority ?? "medium"),
-    timeSemantic: type === "recurring" ? "planned" : (task?.timeSemantic ?? "planned"),
+    priority:
+      type === "recurring" || type === "review"
+        ? "medium"
+        : (task?.priority ?? "medium"),
+    timeSemantic:
+      type === "recurring"
+        ? "planned"
+        : (task?.timeSemantic ?? "planned"),
     taskDate,
     hasTimeRange:
       type === "recurring" ? true : Boolean(task?.startTime && task?.endTime),
@@ -194,6 +206,8 @@ function buildTaskInput(
   values: TaskFormValues,
   task: Task | null,
   ruleValue: RuleEditorValue,
+  reviewIntervals: number[],
+  reviewAnchor: ReviewAnchor,
 ): TaskInput {
   const scheduleLocked = Boolean(
     task && task.type === "once" && task.completedAt,
@@ -231,12 +245,18 @@ function buildTaskInput(
     title: values.title,
     description: values.description.trim() || null,
     type: values.type,
-    priority: values.type === "recurring" ? "medium" : values.priority,
+    priority:
+      values.type === "recurring" || values.type === "review"
+        ? "medium"
+        : values.priority,
     timeSemantic,
     taskDate,
     startTime,
     endTime,
     recurrenceRule,
+    reviewIntervals:
+      values.type === "review" ? normalizeReviewIntervals(reviewIntervals) : null,
+    reviewAnchor: values.type === "review" ? reviewAnchor : null,
     categoryId: values.categoryId,
     tagIds: values.tagIds,
   };
@@ -260,6 +280,7 @@ function FieldError({ message }: { message?: string }) {
 const TYPE_OPTIONS: Array<{ value: TaskType; label: string }> = [
   { value: "once", label: "临时任务" },
   { value: "recurring", label: "循环任务" },
+  { value: "review", label: "记忆复习" },
 ];
 
 const PRIORITY_OPTIONS: Array<{ value: Priority; label: string }> = (
@@ -312,6 +333,12 @@ export function TaskEditorDialog({
     serializeRule(createRuleValue(todayKey(), null)),
   );
   const [ruleError, setRuleError] = useState<string | null>(null);
+  const [reviewIntervals, setReviewIntervals] = useState<number[]>(
+    REVIEW_PRESETS[0].intervals,
+  );
+  const [reviewAnchor, setReviewAnchor] = useState<ReviewAnchor>("initial");
+  const [reviewBaseline, setReviewBaseline] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [pendingSave, setPendingSave] = useState<TaskInput | null>(null);
@@ -327,7 +354,14 @@ export function TaskEditorDialog({
   const readOnly = Boolean(task?.archivedAt);
   const scheduleLocked = Boolean(task && task.type === "once" && task.completedAt);
   const saving = createTask.isPending || updateTask.isPending;
-  const isDirty = formState.isDirty || serializeRule(ruleValue) !== ruleBaseline;
+  const reviewSnapshot = JSON.stringify({
+    intervals: reviewIntervals,
+    anchor: reviewAnchor,
+  });
+  const isDirty =
+    formState.isDirty ||
+    serializeRule(ruleValue) !== ruleBaseline ||
+    (values.type === "review" && reviewSnapshot !== reviewBaseline);
 
   useEffect(() => {
     if (!open) return;
@@ -345,6 +379,19 @@ export function TaskEditorDialog({
     setRuleValue(nextRule);
     setRuleBaseline(serializeRule(nextRule));
     setRuleError(null);
+    const nextReviewIntervals = task?.reviewIntervals?.length
+      ? task.reviewIntervals
+      : REVIEW_PRESETS[0].intervals;
+    const nextReviewAnchor = task?.reviewAnchor ?? "initial";
+    setReviewIntervals(nextReviewIntervals);
+    setReviewAnchor(nextReviewAnchor);
+    setReviewBaseline(
+      JSON.stringify({
+        intervals: nextReviewIntervals,
+        anchor: nextReviewAnchor,
+      }),
+    );
+    setReviewError(null);
     setGeneralError(null);
     setDiscardOpen(false);
     setPendingSave(null);
@@ -390,6 +437,8 @@ export function TaskEditorDialog({
         setValue("startTime", "09:00", { shouldDirty: true });
         setValue("endTime", "10:00", { shouldDirty: true });
       }
+    } else if (next === "review") {
+      setValue("priority", "medium", { shouldDirty: true });
     }
   };
 
@@ -546,11 +595,30 @@ export function TaskEditorDialog({
     }
     setRuleError(null);
 
+    if (formValues.type === "review") {
+      const normalized = normalizeReviewIntervals(reviewIntervals);
+      if (normalized.length === 0) {
+        setReviewError("请至少设置一个复习阶段。");
+        return;
+      }
+      if (normalized.length !== reviewIntervals.length) {
+        setReviewError("复习间隔不能重复，且必须在 1–3650 天之间。");
+        return;
+      }
+    }
+    setReviewError(null);
+
     let input: TaskInput;
     try {
-      input = buildTaskInput(formValues, task, ruleValue);
+      input = buildTaskInput(
+        formValues,
+        task,
+        ruleValue,
+        reviewIntervals,
+        reviewAnchor,
+      );
     } catch (cause) {
-      setRuleError(errorText(cause, "请检查循环规则"));
+      setRuleError(errorText(cause, "请检查任务配置"));
       return;
     }
 
@@ -577,7 +645,9 @@ export function TaskEditorDialog({
                 ? `任务类型：${TYPE_LABEL[task.type]}。类型创建后不可修改；${
                     task.type === "recurring"
                       ? "保存后不会预生成任何每日记录。"
-                      : "取消完成后才能修改日期与时间。"
+                      : task.type === "review"
+                        ? "复习日期由首次学习日期与间隔计划计算，不预生成记录。"
+                        : "取消完成后才能修改日期与时间。"
                   }`
                 : "填写标题、日期与时间即可；更多选项和循环规则按需展开。"}
             </DialogDescription>
@@ -671,7 +741,11 @@ export function TaskEditorDialog({
             >
               <div className="space-y-1.5">
                 <Label htmlFor="task-date">
-                  {values.type === "recurring" ? "开始日期" : "任务日期"}
+                  {values.type === "recurring"
+                    ? "开始日期"
+                    : values.type === "review"
+                      ? "首次学习日期"
+                      : "任务日期"}
                 </Label>
                 <Input
                   id="task-date"
@@ -684,9 +758,13 @@ export function TaskEditorDialog({
                   <p className="text-[11px] leading-5 text-muted-foreground">
                     开始日期 + 时间段共同决定循环的第一次发生时间。
                   </p>
+                ) : values.type === "review" ? (
+                  <p className="text-[11px] leading-5 text-muted-foreground">
+                    首次学习日期是第 0 天，后续复习按计划间隔计算。
+                  </p>
                 ) : null}
               </div>
-              {values.type === "once" ? (
+              {values.type === "once" || values.type === "review" ? (
                 <div className="space-y-1.5">
                   <Label>时间语义</Label>
                   <Controller
@@ -893,6 +971,19 @@ export function TaskEditorDialog({
                   error={ruleError}
                 />
               </>
+            ) : values.type === "review" ? (
+              <ReviewPlanEditor
+                taskDate={values.taskDate}
+                intervals={reviewIntervals}
+                anchor={reviewAnchor}
+                onIntervalsChange={(next) => {
+                  setReviewIntervals(next);
+                  setReviewError(null);
+                }}
+                onAnchorChange={setReviewAnchor}
+                error={reviewError}
+                disabled={readOnly}
+              />
             ) : null}
 
             <details className="group rounded-xl border border-border/80 bg-muted/20 px-4 py-3">

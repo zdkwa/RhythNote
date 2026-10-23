@@ -1,7 +1,7 @@
 [package]
 name = "rhythnote"
-version = "0.1.3"
-description = "RhythNote — local-first personal task and rhythm app"
+version = "0.1.4"
+description = "RhythNote - local-first personal task and rhythm app"
 authors = ["RhythNote"]
 edition = "2021"
 default-run = "rhythnote"

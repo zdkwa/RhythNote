@@ -1,4 +1,10 @@
-import { Archive, CalendarDays, Repeat2, TimerReset } from "lucide-react";
+import {
+  Archive,
+  BookOpenCheck,
+  CalendarDays,
+  Repeat2,
+  TimerReset,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTasks } from "@/data/queries";
 import { PageHeader } from "@/components/layout/page-header";
@@ -8,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { shortDateLabel, timestampToDateKey } from "@/lib/date";
 import { describeRecurrence } from "@/lib/recurrence";
+import { reviewPlanLabel } from "@/domain/review";
 import type { Task } from "@/types/domain";
 
 function ArchivedTaskRow({ task }: { task: Task }) {
@@ -18,6 +25,8 @@ function ArchivedTaskRow({ task }: { task: Task }) {
         <div className="flex flex-wrap items-center gap-2">
           {task.type === "recurring" ? (
             <Repeat2 className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : task.type === "review" ? (
+            <BookOpenCheck className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
             <TimerReset className="h-3.5 w-3.5 text-muted-foreground" />
           )}
@@ -36,7 +45,9 @@ function ArchivedTaskRow({ task }: { task: Task }) {
         <p className="text-xs text-muted-foreground">
           {task.type === "recurring"
             ? describeRecurrence(task.recurrenceRule)
-            : `${shortDateLabel(task.taskDate)} · 一次性任务`}
+            : task.type === "review"
+              ? reviewPlanLabel(task)
+              : `${shortDateLabel(task.taskDate)} · 一次性任务`}
           {archivedDate ? ` · 归档于 ${shortDateLabel(archivedDate)}` : ""}
         </p>
       </div>

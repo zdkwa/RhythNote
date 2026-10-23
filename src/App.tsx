@@ -24,10 +24,17 @@ export default function App() {
                   <Route index element={<HomePage />} />
                   <Route path="day/:date" element={<DayRoute />} />
                   <Route path="tasks" element={<TasksPage />} />
-                  <Route path="tasks/once" element={<TasksPage fixedType="once" />} />
+                  <Route
+                    path="tasks/once"
+                    element={<Navigate to="/tasks?type=once" replace />}
+                  />
                   <Route
                     path="tasks/recurring"
-                    element={<TasksPage fixedType="recurring" />}
+                    element={<Navigate to="/tasks?type=recurring" replace />}
+                  />
+                  <Route
+                    path="tasks/review"
+                    element={<Navigate to="/tasks?type=review" replace />}
                   />
                   <Route
                     path="categories/:categoryId"

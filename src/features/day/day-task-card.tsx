@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import {
   Archive,
+  BookOpenCheck,
   Check,
+  Clock3,
   History,
   Info,
   Loader2,
@@ -37,7 +39,13 @@ import {
   timestampToDateKey,
 } from "@/lib/date";
 import { isTaskOverdue } from "@/domain/day";
+import {
+  reviewPlanLabel,
+  reviewStageForDate,
+  reviewStageLabel,
+} from "@/domain/review";
 import { describeRecurrence } from "@/lib/recurrence";
+import { TimeAdjustDialog } from "@/features/day/time-adjust-dialog";
 
 export type DayCardMode = "active" | "paused" | "history";
 
@@ -88,6 +96,7 @@ export function DayTaskCard({
   const archiveTask = useArchiveTask();
   const [pauseOpen, setPauseOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [timeAdjustOpen, setTimeAdjustOpen] = useState(false);
 
   const isArchived = item.isArchived || Boolean(task.archivedAt);
   const isFuture = date > today;
@@ -108,17 +117,24 @@ export function DayTaskCard({
 
   const canPause =
     mode === "active" &&
-    task.type === "recurring" &&
+    (task.type === "recurring" || task.type === "review") &&
     !isArchived &&
     !done &&
     !item.record &&
     date >= today;
 
   const showInlineNote =
-    task.type === "recurring" &&
+    (task.type === "recurring" || task.type === "review") &&
     mode === "active" &&
     !isArchived &&
     item.kind === "scheduled";
+  const reviewStage =
+    task.type === "review" ? reviewStageForDate(task, date) : null;
+  const canAdjustTime =
+    task.type === "review" &&
+    mode === "active" &&
+    !isArchived &&
+    !isHistory;
 
   const handleToggle = async () => {
     await noteRef.current?.flush();
@@ -170,12 +186,22 @@ export function DayTaskCard({
                 <Repeat2 className="h-3 w-3" />
                 {TYPE_LABEL[task.type]}
               </Badge>
+            ) : task.type === "review" ? (
+              <Badge variant="secondary" className="gap-1">
+                <BookOpenCheck className="h-3 w-3" />
+                {TYPE_LABEL[task.type]}
+              </Badge>
             ) : (
               <Badge variant="secondary" className="gap-1">
                 <TimerReset className="h-3 w-3" />
                 {TYPE_LABEL[task.type]}
               </Badge>
             )}
+            {task.type === "review" && reviewStage != null ? (
+              <Badge variant="accent">
+                {reviewStageLabel(reviewStage, task.reviewIntervals?.length ?? 0)}
+              </Badge>
+            ) : null}
             {task.type === "once" ? (
               <Badge variant={PRIORITY_VARIANT[task.priority]}>
                 {PRIORITY_LABEL[task.priority]}
@@ -224,6 +250,11 @@ export function DayTaskCard({
               <span className="inline-flex items-center gap-1">
                 <Repeat2 aria-hidden="true" className="h-3 w-3" />
                 {describeRecurrence(task.recurrenceRule)}
+              </span>
+            ) : task.type === "review" ? (
+              <span className="inline-flex items-center gap-1">
+                <BookOpenCheck aria-hidden="true" className="h-3 w-3" />
+                {reviewPlanLabel(task)}
               </span>
             ) : null}
             {done && completedAt ? (
@@ -343,6 +374,20 @@ export function DayTaskCard({
                 </Button>
               ) : null}
 
+              {canAdjustTime ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setTimeAdjustOpen(true)}
+                  disabled={busy}
+                  aria-label={`调整复习时间：${task.title}`}
+                  title="调整复习时间"
+                >
+                  <Clock3 className="h-4 w-4" />
+                </Button>
+              ) : null}
+
               <Button
                 type="button"
                 variant="ghost"
@@ -427,6 +472,15 @@ export function DayTaskCard({
         confirmLabel="暂停本次"
         onConfirm={handleConfirmPause}
       />
+
+      {task.type === "review" ? (
+        <TimeAdjustDialog
+          open={timeAdjustOpen}
+          onOpenChange={setTimeAdjustOpen}
+          task={task}
+          date={date}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={archiveOpen}

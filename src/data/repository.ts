@@ -9,6 +9,7 @@ import type {
   TaskInput,
   TaskPause,
   ThemeMode,
+  OccurrenceTimeOverride,
 } from "@/types/domain";
 
 export interface DailyRecordInput {
@@ -54,6 +55,19 @@ export interface Repository {
 
   listCheckinDays(): Promise<string[]>;
   pruneDailyData(beforeDate: string): Promise<void>;
+
+  listTimeOverrides(
+    startDate: string,
+    endDate: string,
+  ): Promise<OccurrenceTimeOverride[]>;
+  setTimeOverride(override: OccurrenceTimeOverride): Promise<void>;
+  updateTaskTimeFrom(
+    taskId: string,
+    timeSemantic: "planned" | "deadline",
+    startTime: string | null,
+    endTime: string | null,
+    fromDate: string,
+  ): Promise<void>;
 
   getTheme(): Promise<ThemeMode>;
   setTheme(theme: ThemeMode): Promise<void>;

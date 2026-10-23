@@ -30,6 +30,7 @@ import { groupDayItems } from "@/features/day/day-items";
 import { useDayActions } from "@/features/day/use-day-actions";
 import { toTaskPauses } from "@/features/records/pause-utils";
 import { QueryErrorBar } from "@/features/records/query-error-bar";
+import { buildTimeOverrideMap } from "@/domain/time-overrides";
 
 export interface DayPageProps {
   /** 由 Lead 在 TaskEditorDialog 就绪后注入；未注入时回退到任务页链接。 */
@@ -53,12 +54,22 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
     valid,
   );
   const pauses = useMemo(() => toTaskPauses(bundle.pauses), [bundle.pauses]);
+  const overrides = useMemo(
+    () => buildTimeOverrideMap(bundle.timeOverrides),
+    [bundle.timeOverrides],
+  );
   const summary = useMemo(
     () =>
       valid
-        ? buildDaySummary(date, bundle.tasks, bundle.records, pauses)
+        ? buildDaySummary(
+            date,
+            bundle.tasks,
+            bundle.records,
+            pauses,
+            overrides,
+          )
         : null,
-    [valid, date, bundle.tasks, bundle.records, pauses],
+    [valid, date, bundle.tasks, bundle.records, pauses, overrides],
   );
   const groups = useMemo(
     () =>

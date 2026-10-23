@@ -12,6 +12,11 @@ import {
 } from "@/types/domain";
 import { dateRange, timestampToDateKey } from "@/lib/date";
 import { expandOccurrences, nextOccurrence } from "@/lib/recurrence";
+import { expandReviewDates, nextReviewOccurrence } from "@/domain/review";
+import {
+  taskAtDate,
+  type TimeOverrideMap,
+} from "@/domain/time-overrides";
 
 export type CalendarState = "green" | "yellow" | "red" | "none" | "upcoming";
 
@@ -21,6 +26,11 @@ interface BuildOptions {
   pauses: TaskPause[];
   start: string;
   end: string;
+  overrides?: TimeOverrideMap;
+}
+
+function isRepeatingTask(task: Task): boolean {
+  return task.type === "recurring" || task.type === "review";
 }
 
 export function archiveDateOf(task: Task): string | null {
@@ -129,6 +139,7 @@ export function buildCalendarSummaries({
   pauses,
   start,
   end,
+  overrides,
 }: BuildOptions): Map<string, DaySummary> {
   const days = dateRange(start, end);
   const summaries = new Map<string, DaySummary>();
@@ -155,14 +166,17 @@ export function buildCalendarSummaries({
   for (const task of tasks) {
     const archiveDate = archiveDateOf(task);
     // 循环任务只从创建日之后开始判定；开始日期可以回填，但创建前不产生“未完成”。
-    const createdDate =
-      task.type === "recurring" ? timestampToDateKey(task.createdAt) : null;
+    const createdDate = isRepeatingTask(task)
+      ? timestampToDateKey(task.createdAt)
+      : null;
     let dates: string[] = [];
     try {
       dates =
         task.type === "once"
           ? [task.taskDate]
-          : expandOccurrences(task, start, end);
+          : task.type === "review"
+            ? expandReviewDates(task, start, end)
+            : expandOccurrences(task, start, end);
     } catch {
       continue;
     }
@@ -182,6 +196,7 @@ export function buildCalendarSummaries({
         continue;
       }
       scheduledKeys.add(key);
+      const effectiveTask = taskAtDate(task, date, overrides);
       if (pauseKeys.has(key)) {
         const summary = summaries.get(date);
         if (summary) {
@@ -189,7 +204,7 @@ export function buildCalendarSummaries({
           summary.items.push({
             key,
             kind: "scheduled",
-            task,
+            task: effectiveTask,
             date,
             record,
             isPaused: true,
@@ -213,7 +228,7 @@ export function buildCalendarSummaries({
       summary.items.push({
         key,
         kind: "scheduled",
-        task,
+        task: effectiveTask,
         date,
         record,
         isPaused: false,
@@ -260,6 +275,7 @@ export function buildDaySummary(
   tasks: Task[],
   records: DailyRecord[],
   pauses: TaskPause[],
+  overrides?: TimeOverrideMap,
 ): DaySummary {
   const map = buildCalendarSummaries({
     tasks,
@@ -267,6 +283,7 @@ export function buildDaySummary(
     pauses,
     start: date,
     end: date,
+    overrides,
   });
   return map.get(date) ?? {
     date,
@@ -288,6 +305,11 @@ export function todayStatusForTask(
   if (record?.status === "done") return "done";
   if (record?.status === "undone") return "undone";
   return "none";
+}
+
+function doneFromTaskAndRecord(task: Task, record: DailyRecord | null): boolean {
+  if (task.type === "once") return Boolean(task.completedAt);
+  return record?.status === "done";
 }
 
 export function isTodayWithinBlock(
@@ -356,17 +378,13 @@ export function sortDayItems(
         ? false
         : a.kind === "orphan-done"
           ? true
-          : a.task.type === "once"
-            ? Boolean(a.task.completedAt)
-            : a.record?.status === "done";
+          : doneFromTaskAndRecord(a.task, a.record);
     const bDone =
       b.kind === "orphan-note"
         ? false
         : b.kind === "orphan-done"
           ? true
-          : b.task.type === "once"
-            ? Boolean(b.task.completedAt)
-            : b.record?.status === "done";
+          : doneFromTaskAndRecord(b.task, b.record);
     if (aDone !== bDone) return aDone ? 1 : -1;
     if (a.isPaused !== b.isPaused) return a.isPaused ? 1 : -1;
     const aCurrent = isTodayWithinBlock(a.task, a.date, today, nowTime);
@@ -388,14 +406,8 @@ export function sortOccurrences(
   nowTime: string,
 ): OccurrenceWithStatus[] {
   return [...items].sort((a, b) => {
-    const aDone =
-      a.task.type === "once"
-        ? Boolean(a.task.completedAt)
-        : a.record?.status === "done";
-    const bDone =
-      b.task.type === "once"
-        ? Boolean(b.task.completedAt)
-        : b.record?.status === "done";
+    const aDone = doneFromTaskAndRecord(a.task, a.record);
+    const bDone = doneFromTaskAndRecord(b.task, b.record);
     if (aDone !== bDone) return aDone ? 1 : -1;
     if (a.isPaused !== b.isPaused) return a.isPaused ? 1 : -1;
     const aCurrent = isTodayWithinBlock(a.task, a.date, today, nowTime);
@@ -458,6 +470,12 @@ export function buildTaskWithStatus(
     try {
       // 定义卡展示“下次发生”，不重复展示今天这一次。
       next = nextOccurrence(task, today, false);
+    } catch {
+      next = null;
+    }
+  } else if (task.type === "review") {
+    try {
+      next = nextReviewOccurrence(task, today, false);
     } catch {
       next = null;
     }

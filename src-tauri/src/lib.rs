@@ -40,6 +40,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0002_checkin_days.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "add_review_tasks_and_time_overrides",
+            sql: include_str!("../migrations/0003_review_tasks.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

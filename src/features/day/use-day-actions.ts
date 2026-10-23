@@ -240,7 +240,9 @@ export function useDayActions(date: string): DayActions {
 
   const pauseOccurrence = useCallback(
     async (item: DayItem): Promise<void> => {
-      if (item.task.type !== "recurring") return;
+      if (item.task.type !== "recurring" && item.task.type !== "review") {
+        return;
+      }
       if (item.task.archivedAt || item.isPaused) return;
       if (item.date < todayKey()) {
         toast.error("只能暂停今天或未来日期");
