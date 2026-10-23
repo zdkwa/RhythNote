@@ -1,6 +1,7 @@
 import {
   addDays,
   addMonths,
+  addYears,
   differenceInCalendarDays,
   eachDayOfInterval,
   endOfMonth,
@@ -64,6 +65,10 @@ export function addDaysKey(key: string, amount: number): string {
 
 export function addMonthsKey(key: string, amount: number): string {
   return toMonthKey(addMonths(parseMonthKey(key), amount));
+}
+
+export function addYearsKey(key: string, amount: number): string {
+  return toDateKey(addYears(parseDateKey(key), amount));
 }
 
 export function dateRange(startKey: string, endKey: string): string[] {

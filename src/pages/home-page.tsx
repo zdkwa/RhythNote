@@ -16,12 +16,11 @@ import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useDayActions } from "@/features/day/use-day-actions";
 import { isItemDone } from "@/features/day/day-items";
-import { useRecords, useWorkspaceBundle } from "@/data/queries";
+import { useCheckinDays, useWorkspaceBundle } from "@/data/queries";
 import { useClock, useToday } from "@/hooks/useToday";
 import {
   buildCalendarSummaries,
   buildDaySummary,
-  collectCheckinDates,
   isTaskOverdue,
   isTaskStartingSoon,
   isTodayWithinBlock,
@@ -278,7 +277,7 @@ export function HomePage() {
   }, [rawMonth, currentMonthKey, params, setParams]);
 
   const todayBundle = useWorkspaceBundle(today, today, true);
-  const historyRecordsQuery = useRecords("1970-01-01", today);
+  const checkinQuery = useCheckinDays();
   const todayPauses = useMemo(
     () => toTaskPauses(todayBundle.pauses),
     [todayBundle.pauses],
@@ -378,12 +377,8 @@ export function HomePage() {
   const temporaryItems = temporaryUnfinishedItems.slice(0, 2);
 
   const checkinDates = useMemo(
-    () =>
-      collectCheckinDates(
-        todayBundle.tasks,
-        historyRecordsQuery.data ?? [],
-      ),
-    [todayBundle.tasks, historyRecordsQuery.data],
+    () => new Set(checkinQuery.data ?? []),
+    [checkinQuery.data],
   );
 
   const goToMonth = (nextMonth: string) => {

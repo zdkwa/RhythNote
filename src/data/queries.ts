@@ -22,6 +22,7 @@ export const keys = {
   tasks: (includeArchived: boolean) => ["tasks", { includeArchived }] as const,
   records: (start: string, end: string) => ["records", start, end] as const,
   pauses: (start: string, end: string) => ["pauses", start, end] as const,
+  checkinDays: ["checkin-days"] as const,
   archive: ["archive"] as const,
   calendar: (month: string) => ["calendar", month] as const,
   day: (date: string) => ["day", date] as const,
@@ -63,6 +64,13 @@ export function usePauses(start: string, end: string, enabled = true) {
     queryKey: keys.pauses(start, end),
     queryFn: () => repository.listPauses(start, end),
     enabled: enabled && Boolean(start && end),
+  });
+}
+
+export function useCheckinDays() {
+  return useQuery({
+    queryKey: keys.checkinDays,
+    queryFn: () => repository.listCheckinDays(),
   });
 }
 

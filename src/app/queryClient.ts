@@ -16,6 +16,7 @@ export function invalidateAll(): void {
 
 export function invalidateTasksAndCalendar(): void {
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  void queryClient.invalidateQueries({ queryKey: ["checkin-days"] });
   void queryClient.invalidateQueries({ queryKey: ["calendar"] });
   void queryClient.invalidateQueries({ queryKey: ["day"] });
   void queryClient.invalidateQueries({ queryKey: ["occurrences"] });
@@ -25,6 +26,7 @@ export function invalidateTasksAndCalendar(): void {
 export function invalidateRecordsAndCalendar(): void {
   void queryClient.invalidateQueries({ queryKey: ["records"] });
   void queryClient.invalidateQueries({ queryKey: ["pauses"] });
+  void queryClient.invalidateQueries({ queryKey: ["checkin-days"] });
   void queryClient.invalidateQueries({ queryKey: ["calendar"] });
   void queryClient.invalidateQueries({ queryKey: ["day"] });
   void queryClient.invalidateQueries({ queryKey: ["occurrences"] });

@@ -47,6 +47,15 @@ export function GeneralSettings() {
                   : getDatabasePathLabel()}
               </dd>
             </div>
+            <div className="flex items-start justify-between gap-3 border-t border-border/70 pt-2">
+              <dt className="shrink-0 text-muted-foreground">保留策略</dt>
+              <dd className="text-right text-[11px] text-foreground">
+                每日记录仅保留最近 2 年
+                <span className="block text-[10px] text-muted-foreground">
+                  已打卡天数会保留汇总
+                </span>
+              </dd>
+            </div>
           </dl>
         </div>
 

@@ -15,6 +15,7 @@ import {
   addDaysKey,
   addMonthsKey,
   todayKey,
+  timestampToDateKey,
   toMonthKey,
 } from "@/lib/date";
 import { expandOccurrences } from "@/lib/recurrence";
@@ -51,10 +52,35 @@ export class MemoryRepository implements Repository {
   private tasks: Task[] = [];
   private records: DailyRecord[] = [];
   private pauses: TaskPause[] = [];
+  private checkinDates = new Set<string>();
   private theme: ThemeMode = "system";
 
   constructor(seed = true) {
     if (seed) this.seed();
+    this.hydrateCheckinDays();
+  }
+
+  private hydrateCheckinDays(): void {
+    for (const record of this.records) {
+      if (record.status !== "done") continue;
+      if (record.completedAt) {
+        try {
+          this.checkinDates.add(timestampToDateKey(record.completedAt));
+          continue;
+        } catch {
+          // 回退到记录日期。
+        }
+      }
+      this.checkinDates.add(record.recordDate);
+    }
+    for (const task of this.tasks) {
+      if (task.type !== "once" || !task.completedAt) continue;
+      try {
+        this.checkinDates.add(timestampToDateKey(task.completedAt));
+      } catch {
+        // 忽略异常时间戳。
+      }
+    }
   }
 
   private seed(): void {
@@ -617,6 +643,7 @@ export class MemoryRepository implements Repository {
     task.completedAt = completed ? nowIso() : null;
     task.isBackfilled = completed && task.taskDate < today;
     task.updatedAt = nowIso();
+    if (completed) this.checkinDates.add(today);
   }
 
   async listRecords(startDate: string, endDate: string): Promise<DailyRecord[]> {
@@ -684,6 +711,7 @@ export class MemoryRepository implements Repository {
       existing.completedAt =
         input.status === "done" ? input.completedAt ?? now : null;
       existing.updatedAt = now;
+      if (input.status === "done") this.checkinDates.add(today);
       return cloneRecord(existing);
     }
     const record: DailyRecord = {
@@ -698,6 +726,7 @@ export class MemoryRepository implements Repository {
       updatedAt: now,
     };
     this.records.push(record);
+    if (input.status === "done") this.checkinDates.add(today);
     return cloneRecord(record);
   }
 
@@ -754,6 +783,18 @@ export class MemoryRepository implements Repository {
     this.pauses = this.pauses.filter(
       (pause) => !(pause.taskId === taskId && pause.pauseDate === pauseDate),
     );
+  }
+
+  async listCheckinDays(): Promise<string[]> {
+    return [...this.checkinDates].sort();
+  }
+
+  async pruneDailyData(beforeDate: string): Promise<void> {
+    this.hydrateCheckinDays();
+    this.records = this.records.filter(
+      (record) => record.recordDate >= beforeDate,
+    );
+    this.pauses = this.pauses.filter((pause) => pause.pauseDate >= beforeDate);
   }
 
   async getTheme(): Promise<ThemeMode> {

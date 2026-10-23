@@ -52,6 +52,9 @@ export interface Repository {
   addPause(taskId: string, pauseDate: string): Promise<void>;
   removePause(taskId: string, pauseDate: string): Promise<void>;
 
+  listCheckinDays(): Promise<string[]>;
+  pruneDailyData(beforeDate: string): Promise<void>;
+
   getTheme(): Promise<ThemeMode>;
   setTheme(theme: ThemeMode): Promise<void>;
 }

@@ -442,6 +442,12 @@ export class SqliteRepository implements Repository {
       "UPDATE tasks SET completed_at = $1, is_backfilled = $2, updated_at = $3 WHERE id = $4 AND archived_at IS NULL AND type = 'once'",
       [completed ? now : null, completed && task.taskDate < today ? 1 : 0, now, id],
     );
+    if (completed) {
+      await db.execute(
+        "INSERT OR IGNORE INTO checkin_days (date, created_at) VALUES ($1, $2)",
+        [today, now],
+      );
+    }
   }
 
   async listRecords(startDate: string, endDate: string): Promise<DailyRecord[]> {
@@ -517,6 +523,12 @@ export class SqliteRepository implements Repository {
         now,
       ],
     );
+    if (input.status === "done") {
+      await db.execute(
+        "INSERT OR IGNORE INTO checkin_days (date, created_at) VALUES ($1, $2)",
+        [today, now],
+      );
+    }
     const record = await this.getRecord(input.taskId, input.recordDate);
     if (!record) throw new Error("记录保存失败");
     return record;
@@ -569,6 +581,39 @@ export class SqliteRepository implements Repository {
     await db.execute(
       "DELETE FROM task_pauses WHERE task_id = $1 AND pause_date = $2",
       [taskId, pauseDate],
+    );
+  }
+
+  async listCheckinDays(): Promise<string[]> {
+    const db = await getDb();
+    const rows = await db.select<Array<{ date: string }>>(
+      "SELECT date FROM checkin_days ORDER BY date ASC",
+    );
+    return rows.map((row) => row.date);
+  }
+
+  async pruneDailyData(beforeDate: string): Promise<void> {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    // 保留历史“已打卡天数”汇总，再删除超过保留期的明细。
+    await db.execute(
+      `INSERT OR IGNORE INTO checkin_days (date, created_at)
+       SELECT record_date, $1 FROM daily_records WHERE status = 'done'`,
+      [now],
+    );
+    await db.execute(
+      `INSERT OR IGNORE INTO checkin_days (date, created_at)
+       SELECT date(completed_at), $1 FROM tasks
+       WHERE type = 'once' AND completed_at IS NOT NULL`,
+      [now],
+    );
+    await db.execute(
+      "DELETE FROM daily_records WHERE record_date < $1",
+      [beforeDate],
+    );
+    await db.execute(
+      "DELETE FROM task_pauses WHERE pause_date < $1",
+      [beforeDate],
     );
   }
 
