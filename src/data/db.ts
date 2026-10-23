@@ -11,10 +11,20 @@ export function isTauriRuntime(): boolean {
 
 export function getDatabase(): Promise<Database> {
   if (!databasePromise) {
-    databasePromise = Database.load("sqlite:rhythnote.db").catch((error) => {
-      databasePromise = null;
-      throw error;
-    });
+    databasePromise = Database.load("sqlite:rhythnote.db")
+      .then(async (db) => {
+        try {
+          // 避免并发写入时无限等待：SQLite 最多等待 5 秒后返回 busy 错误。
+          await db.execute("PRAGMA busy_timeout = 5000");
+        } catch {
+          // busy_timeout 设置失败不应阻止应用启动。
+        }
+        return db;
+      })
+      .catch((error) => {
+        databasePromise = null;
+        throw error;
+      });
   }
   return databasePromise;
 }

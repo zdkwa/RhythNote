@@ -13,6 +13,7 @@ import {
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { isTaskOverdue } from "@/domain/day";
+import { withTimeout } from "@/lib/async";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -415,20 +416,30 @@ function DefinitionCard({ task, today, nowTime, onEdit }: DefinitionCardProps) {
   };
 
   const handlePause = async () => {
+    setPauseOpen(false);
     try {
-      await addPause.mutateAsync({ taskId: task.id, pauseDate: today });
+      await withTimeout(
+        addPause.mutateAsync({ taskId: task.id, pauseDate: today }),
+        8_000,
+        "暂停超时，数据库可能被其他 RhythNote 窗口占用；请关闭其他实例后重试。",
+      );
       toast.success("今天已暂停，未写入每日记录");
-      setPauseOpen(false);
     } catch (cause) {
+      addPause.reset();
       toast.error(`暂停失败：${errorMessage(cause, "请先清除该日期记录")}`);
     }
   };
 
   const handleResume = async () => {
     try {
-      await removePause.mutateAsync({ taskId: task.id, pauseDate: today });
+      await withTimeout(
+        removePause.mutateAsync({ taskId: task.id, pauseDate: today }),
+        8_000,
+        "取消暂停超时，请关闭其他 RhythNote 实例后重试。",
+      );
       toast.success("已取消暂停，今天恢复安排");
     } catch (cause) {
+      removePause.reset();
       toast.error(`取消暂停失败：${errorMessage(cause, "请重试")}`);
     }
   };
@@ -694,26 +705,35 @@ function OccurrenceCard({
   };
 
   const handlePause = async () => {
+    setPauseOpen(false);
     try {
       await flushNote();
       if (latestRecord()) {
         toast.error("该日期已有备注或完成记录，无法暂停");
-        setPauseOpen(false);
         return;
       }
-      await addPause.mutateAsync({ taskId: task.id, pauseDate: date });
+      await withTimeout(
+        addPause.mutateAsync({ taskId: task.id, pauseDate: date }),
+        8_000,
+        "暂停超时，请关闭其他 RhythNote 实例后重试。",
+      );
       toast.success("已暂停，该日期不再计入统计");
-      setPauseOpen(false);
     } catch (cause) {
+      addPause.reset();
       toast.error(`暂停失败：${errorMessage(cause, "该日期可能已有记录")}`);
     }
   };
 
   const handleResume = async () => {
     try {
-      await removePause.mutateAsync({ taskId: task.id, pauseDate: date });
+      await withTimeout(
+        removePause.mutateAsync({ taskId: task.id, pauseDate: date }),
+        8_000,
+        "取消暂停超时，请关闭其他 RhythNote 实例后重试。",
+      );
       toast.success("已取消暂停");
     } catch (cause) {
+      removePause.reset();
       toast.error(`取消暂停失败：${errorMessage(cause, "请重试")}`);
     }
   };

@@ -47,6 +47,8 @@ export function ConfirmDialog({
                 "bg-destructive text-destructive-foreground hover:bg-destructive/90",
             )}
             onClick={() => {
+              // 先关闭确认层，避免异步失败或数据库繁忙时遮罩残留、阻塞后续操作。
+              onOpenChange(false);
               void onConfirm();
             }}
           >

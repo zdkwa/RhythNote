@@ -51,6 +51,7 @@ import {
   validateRuleText,
   type RuleEditorValue,
 } from "@/features/tasks/recurrence-rule";
+import { withTimeout } from "@/lib/async";
 import { isValidDateKey, todayKey } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import {
@@ -489,16 +490,26 @@ export function TaskEditorDialog({
     setGeneralError(null);
     try {
       if (task) {
-        await updateTask.mutateAsync({ id: task.id, input });
+        await withTimeout(
+          updateTask.mutateAsync({ id: task.id, input }),
+          12_000,
+          "保存超时，数据库可能被其他 RhythNote 窗口占用；请关闭其他实例后重试。",
+        );
         toast.success("任务已保存");
       } else {
-        await createTask.mutateAsync(input);
+        await withTimeout(
+          createTask.mutateAsync(input),
+          12_000,
+          "保存超时，数据库可能被其他 RhythNote 窗口占用；请关闭其他实例后重试。",
+        );
         toast.success("任务已创建");
       }
       setPendingSave(null);
       suppressCloseConfirm.current = true;
       onOpenChange(false);
     } catch (cause) {
+      createTask.reset();
+      updateTask.reset();
       const message = errorText(cause, "保存失败，请重试");
       setPendingSave(null);
       setGeneralError(message);
