@@ -10,16 +10,17 @@ RhythNote 把「循环任务」「记忆复习」和「每日记录」分开：�
 
 `v0.1.5` · Windows 10/11 x64
 
-当前版本为本地构建，包含记忆复习、任务类型筛选、两年度数据清理与操作超时恢复。
+当前版本包含记忆复习、任务类型筛选、两年度数据清理与操作超时恢复。
 
 | 文件 | 说明 |
 |---|---|
-| `RhythNote_0.1.5_x64-setup.exe` | NSIS 安装包，本地构建 |
-| `RhythNote.exe` | 便携版，直接运行 |
+| [RhythNote_0.1.5_x64-setup.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.5/RhythNote_0.1.5_x64-setup.exe) | NSIS 安装包，推荐 |
+| [RhythNote.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.5/RhythNote.exe) | 便携版，直接运行 |
+| [GitHub Release](https://github.com/zdkwa/RhythNote/releases/tag/v0.1.5) | 版本发布页与 SHA256 |
 
 安装包未做代码签名。Windows SmartScreen 提示时，选择「更多信息 → 仍要运行」。
 
-> `v0.1.5` 暂未上传 GitHub；GitHub 上仍是最新的 `v0.1.1` 发布版本。
+> `v0.1.5` 已发布到 GitHub Release。
 
 ## 界面预览
 
@@ -191,6 +192,7 @@ docs/
 - 创建、完成、补做、取消完成、暂停、复习时间调整增加 8–12 秒超时恢复，避免按钮永久转圈。
 - 写操作超时或失败后主动重新同步任务、记录、日历与打卡数据。
 - 记忆复习、类型筛选等 0.1.4 功能保持不变。
+- 已发布 GitHub Release `v0.1.5`。
 
 ### 0.1.4
 
