@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSetTimeOverride, useUpdateTaskTimeFrom } from "@/data/queries";
 import { dateWithWeekday } from "@/lib/date";
+import { withTimeout } from "@/lib/async";
 import { cn } from "@/lib/utils";
 import type { Task, TimeSemantic } from "@/types/domain";
 
@@ -84,27 +85,37 @@ export function TimeAdjustDialog({
     setError(null);
     try {
       if (scope === "single") {
-        await setOverride.mutateAsync({
-          taskId: task.id,
-          occurrenceDate: date,
-          timeSemantic,
-          startTime: nextStart,
-          endTime: nextEnd,
-          updatedAt: new Date().toISOString(),
-        });
+        await withTimeout(
+          setOverride.mutateAsync({
+            taskId: task.id,
+            occurrenceDate: date,
+            timeSemantic,
+            startTime: nextStart,
+            endTime: nextEnd,
+            updatedAt: new Date().toISOString(),
+          }),
+          10_000,
+          "调整超时，数据库可能被其他 RhythNote 实例占用；请关闭其他实例后重试。",
+        );
         toast.success("已只调整今天的时间");
       } else {
-        await updateFuture.mutateAsync({
-          taskId: task.id,
-          timeSemantic,
-          startTime: nextStart,
-          endTime: nextEnd,
-          fromDate: date,
-        });
+        await withTimeout(
+          updateFuture.mutateAsync({
+            taskId: task.id,
+            timeSemantic,
+            startTime: nextStart,
+            endTime: nextEnd,
+            fromDate: date,
+          }),
+          10_000,
+          "调整超时，数据库可能被其他 RhythNote 实例占用；请关闭其他实例后重试。",
+        );
         toast.success("已调整今天及之后所有复习时间");
       }
       onOpenChange(false);
     } catch (cause) {
+      setOverride.reset();
+      updateFuture.reset();
       setError(cause instanceof Error ? cause.message : "调整失败，请重试。");
     }
   };

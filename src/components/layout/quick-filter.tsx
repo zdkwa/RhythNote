@@ -32,7 +32,9 @@ export function useQuickFilter(): [TaskScope, (scope: TaskScope) => void] {
     : "today";
   const setScope = (next: TaskScope) => {
     const updated = new URLSearchParams(params);
-    if (next === "all") updated.delete("scope");
+    // 默认范围是 today；选择“全部”必须显式写入 scope=all，
+    // 否则删除参数后会再次回落到 today，导致“全部”无法选中。
+    if (next === "today") updated.delete("scope");
     else updated.set("scope", next);
     setParams(updated, { replace: true });
   };

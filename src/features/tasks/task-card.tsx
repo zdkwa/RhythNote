@@ -371,6 +371,7 @@ function ActionMenu({
 }
 
 function DefinitionCard({ task, today, nowTime, onEdit }: DefinitionCardProps) {
+  const queryClient = useQueryClient();
   const setOnceCompletion = useSetOnceCompletion();
   const archiveTask = useArchiveTask();
   const addPause = useAddPause();
@@ -411,22 +412,32 @@ function DefinitionCard({ task, today, nowTime, onEdit }: DefinitionCardProps) {
     if (task.type !== "once" || archived) return;
     try {
       if (task.completedAt) {
-        await setOnceCompletion.mutateAsync({
-          id: task.id,
-          completed: false,
-          isBackfilled: false,
-        });
+        await withTimeout(
+          setOnceCompletion.mutateAsync({
+            id: task.id,
+            completed: false,
+            isBackfilled: false,
+          }),
+          10_000,
+          "操作超时，数据库可能被其他 RhythNote 实例占用；请关闭其他实例后重试。",
+        );
         toast.success("已取消完成");
         return;
       }
       const backfilled = task.taskDate < today;
-      await setOnceCompletion.mutateAsync({
-        id: task.id,
-        completed: true,
-        isBackfilled: backfilled,
-      });
+      await withTimeout(
+        setOnceCompletion.mutateAsync({
+          id: task.id,
+          completed: true,
+          isBackfilled: backfilled,
+        }),
+        10_000,
+        "操作超时，数据库可能被其他 RhythNote 实例占用；请关闭其他实例后重试。",
+      );
       toast.success(backfilled ? "已补做" : "已完成");
     } catch (cause) {
+      setOnceCompletion.reset();
+      void queryClient.invalidateQueries();
       toast.error(`操作失败：${errorMessage(cause, "请重试")}`);
     }
   };
@@ -678,23 +689,34 @@ function OccurrenceCard({
       await flushNote();
       const current = latestRecord();
       if (task.type === "once") {
-        await setOnceCompletion.mutateAsync({
-          id: task.id,
-          completed: true,
-          isBackfilled: backfill,
-        });
+        await withTimeout(
+          setOnceCompletion.mutateAsync({
+            id: task.id,
+            completed: true,
+            isBackfilled: backfill,
+          }),
+          10_000,
+          "操作超时，数据库可能被其他 RhythNote 实例占用；请关闭其他实例后重试。",
+        );
       } else {
-        await upsertRecord.mutateAsync({
-          taskId: task.id,
-          recordDate: date,
-          status: "done",
-          note: current?.note ?? null,
-          isBackfilled: backfill,
-          completedAt: new Date().toISOString(),
-        });
+        await withTimeout(
+          upsertRecord.mutateAsync({
+            taskId: task.id,
+            recordDate: date,
+            status: "done",
+            note: current?.note ?? null,
+            isBackfilled: backfill,
+            completedAt: new Date().toISOString(),
+          }),
+          10_000,
+          "操作超时，数据库可能被其他 RhythNote 实例占用；请关闭其他实例后重试。",
+        );
       }
       toast.success(backfill ? "已补做" : "已完成");
     } catch (cause) {
+      setOnceCompletion.reset();
+      upsertRecord.reset();
+      void queryClient.invalidateQueries();
       toast.error(`完成失败：${errorMessage(cause, "请重试")}`);
     }
   };
@@ -705,26 +727,42 @@ function OccurrenceCard({
       await flushNote();
       const current = latestRecord();
       if (task.type === "once") {
-        await setOnceCompletion.mutateAsync({
-          id: task.id,
-          completed: false,
-          isBackfilled: false,
-        });
+        await withTimeout(
+          setOnceCompletion.mutateAsync({
+            id: task.id,
+            completed: false,
+            isBackfilled: false,
+          }),
+          10_000,
+          "操作超时，请关闭其他 RhythNote 实例后重试。",
+        );
       } else if (current?.note) {
         // 有备注时保留记录，只把状态改回 undone。
-        await upsertRecord.mutateAsync({
-          taskId: task.id,
-          recordDate: date,
-          status: "undone",
-          note: current.note,
-          isBackfilled: false,
-          completedAt: null,
-        });
+        await withTimeout(
+          upsertRecord.mutateAsync({
+            taskId: task.id,
+            recordDate: date,
+            status: "undone",
+            note: current.note,
+            isBackfilled: false,
+            completedAt: null,
+          }),
+          10_000,
+          "操作超时，请关闭其他 RhythNote 实例后重试。",
+        );
       } else {
-        await deleteRecord.mutateAsync({ taskId: task.id, recordDate: date });
+        await withTimeout(
+          deleteRecord.mutateAsync({ taskId: task.id, recordDate: date }),
+          10_000,
+          "操作超时，请关闭其他 RhythNote 实例后重试。",
+        );
       }
       toast.success("已取消完成");
     } catch (cause) {
+      setOnceCompletion.reset();
+      upsertRecord.reset();
+      deleteRecord.reset();
+      void queryClient.invalidateQueries();
       toast.error(`取消失败：${errorMessage(cause, "请重试")}`);
     }
   };

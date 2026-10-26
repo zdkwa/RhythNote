@@ -12,6 +12,7 @@ import {
 import type { DailyRecordInput } from "@/data/repository";
 import type { DailyRecord, DayItem } from "@/types/domain";
 import { todayKey } from "@/lib/date";
+import { withTimeout } from "@/lib/async";
 import { isItemDone } from "@/features/day/day-items";
 import {
   applyOptimisticDeleteRecord,
@@ -83,17 +84,24 @@ export function useDayActions(date: string): DayActions {
       pendingRef.current = true;
       setPendingKey(key);
       try {
-        await action();
+        // 数据库偶发锁定或 IPC 不返回时，不能让所有按钮永久处于 pending。
+        await withTimeout(
+          action(),
+          10_000,
+          "操作超时，数据库可能被其他 RhythNote 实例占用；请关闭其他实例后重试。",
+        );
       } catch (error) {
         rollback();
         console.error("[day] 写操作失败", error);
         toast.error(userMessage(error, fallbackMessage));
+        // 超时可能发生在底层写入已经完成但 Promise 未返回之后，主动重新同步。
+        void queryClient.invalidateQueries();
       } finally {
         pendingRef.current = false;
         setPendingKey(null);
       }
     },
-    [],
+    [queryClient],
   );
 
   const toggleCompletion = useCallback(
