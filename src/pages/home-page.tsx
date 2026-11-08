@@ -46,7 +46,6 @@ import { MonthCalendar } from "@/features/calendar/month-calendar";
 import { MonthToolbar } from "@/features/calendar/month-toolbar";
 import { toTaskPauses } from "@/features/records/pause-utils";
 import { QueryErrorBar } from "@/features/records/query-error-bar";
-import { DayTimeline } from "@/features/day/day-timeline";
 import { buildTimeOverrideMap } from "@/domain/time-overrides";
 import { cn } from "@/lib/utils";
 
@@ -516,13 +515,6 @@ export function HomePage() {
           </div>
           <CheckinCard dates={checkinDates} today={today} />
         </div>
-
-        <DayTimeline
-          items={todaySummary.items}
-          date={today}
-          today={today}
-          nowTime={now}
-        />
 
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
           <div className="space-y-4">

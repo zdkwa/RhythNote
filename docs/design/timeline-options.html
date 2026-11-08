@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RhythNote 时间轴方案样图</title>
+<style>
+  :root {
+    --paper: #f5f1e8;
+    --card: #fffdf8;
+    --ink: #1d2824;
+    --muted: #74817a;
+    --line: #dcd7ca;
+    --accent: #0f5b46;
+    --soft: #e9e4d8;
+    --shadow: 0 18px 50px rgba(37, 47, 40, 0.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 30px;
+    background: #e9e4d8;
+    color: var(--ink);
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  }
+  .sample {
+    width: 1100px;
+    margin: 0 0 28px;
+    padding: 26px 28px 24px;
+    background: var(--paper);
+    border: 1px solid rgba(50, 60, 50, 0.14);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+  }
+  .kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #e3ede6;
+    color: #185f49;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  h1 { margin: 10px 0 2px; font-size: 25px; letter-spacing: -0.02em; }
+  .sub { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
+  .meta { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .legend { display: flex; gap: 13px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .chart { margin-top: 18px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.5); padding: 14px 14px 10px; }
+  .chart-row { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 12px; }
+  .axis { position: relative; height: 20px; border-bottom: 1px solid var(--line); }
+  .axis-label { position: absolute; bottom: 4px; transform: translateX(-50%); color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+  .axis-label.first { transform: translateX(0); }
+  .axis-label.last { transform: translateX(-100%); }
+  .rows { position: relative; }
+  .row { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 12px; align-items: center; min-height: 39px; }
+  .row + .row { border-top: 1px solid rgba(220,215,202,0.58); }
+  .label { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .order { width: 20px; height: 20px; flex: 0 0 20px; border-radius: 6px; background: #e8e4d9; color: #758078; display: grid; place-items: center; font-size: 9px; font-weight: 700; }
+  .label-main { min-width: 0; }
+  .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; }
+  .time { color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .track { position: relative; height: 34px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); background-size: 8.3333% 100%; background-image: linear-gradient(to right, rgba(180,175,160,0.22) 0 1px, transparent 1px); }
+  .track::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(to right, transparent 0 calc(8.3333% - 1px), rgba(180,175,160,0.1) calc(8.3333% - 1px) 8.3333%); }
+  .bar { position: absolute; top: 7px; height: 20px; min-width: 4px; border-radius: 5px; color: white; display: flex; align-items: center; overflow: hidden; padding: 0 6px; font-size: 9px; font-weight: 700; box-shadow: 0 2px 5px rgba(20,30,20,0.08); z-index: 2; }
+  .now { position: absolute; top: 0; bottom: 0; width: 1px; background: #d94c4c; z-index: 5; }
+  .now::before { content: ""; position: absolute; top: -3px; left: -2px; width: 5px; height: 5px; border-radius: 50%; background: #d94c4c; }
+  .now-label { position: absolute; top: -18px; transform: translateX(-50%); color: #b23c3c; font-size: 8px; font-weight: 700; white-space: nowrap; }
+  .all-day .bar { top: 8px; height: 18px; color: #42514a; border: 1px solid currentColor; }
+  .chart-foot { color: var(--muted); font-size: 9px; margin-top: 9px; display: flex; gap: 7px; align-items: center; }
+  .note { margin-top: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .note div { background: rgba(255,255,255,0.45); border: 1px solid rgba(220,215,202,0.8); border-radius: 9px; padding: 8px 10px; color: var(--muted); font-size: 9px; line-height: 1.5; }
+  .note strong { color: var(--ink); display: block; font-size: 10px; margin-bottom: 2px; }
+
+  /* B: 时间卡片 */
+  .sample-b .chart { padding-top: 18px; }
+  .sample-b .axis-label { font-size: 8px; }
+  .sample-b .row { min-height: 48px; }
+  .sample-b .track { height: 44px; }
+  .sample-b .start-pin { position: absolute; top: 7px; width: 2px; height: 30px; border-radius: 999px; z-index: 3; }
+  .sample-b .task-card { position: absolute; top: 8px; min-width: 150px; height: 28px; padding: 4px 8px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); border-left: 4px solid; box-shadow: 0 3px 8px rgba(40,40,30,0.08); z-index: 2; overflow: hidden; }
+  .sample-b .task-card .card-title { font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sample-b .task-card .card-time { color: var(--muted); font-size: 8px; margin-top: 0; font-variant-numeric: tabular-nums; }
+  .sample-b .duration { position: absolute; bottom: 7px; left: 0; height: 2px; opacity: 0.55; border-radius: 2px; z-index: 1; }
+
+  /* C: 分段日程 */
+  .sample-c .periods { display: grid; gap: 10px; margin-top: 17px; }
+  .period { border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.44); padding: 10px 12px 8px; }
+  .period-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .period-title { font-size: 11px; font-weight: 700; }
+  .period-range { color: var(--muted); font-size: 9px; }
+  .period-axis { margin-left: 178px; height: 14px; border-bottom: 1px solid var(--line); position: relative; }
+  .period-axis span { position: absolute; bottom: 2px; transform: translateX(-50%); color: var(--muted); font-size: 8px; }
+  .period-row { display: grid; grid-template-columns: 178px 1fr; gap: 10px; min-height: 29px; align-items: center; }
+  .period-row + .period-row { border-top: 1px solid rgba(220,215,202,0.5); }
+  .period-label { display: flex; gap: 7px; align-items: center; min-width: 0; }
+  .period-label .swatch { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+  .period-label .p-title { font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .period-label .p-time { font-size: 8px; color: var(--muted); white-space: nowrap; margin-left: auto; }
+  .period-track { height: 28px; position: relative; border-left: 1px solid var(--line); border-right: 1px solid var(--line); background-image: linear-gradient(to right, rgba(180,175,160,0.18) 0 1px, transparent 1px); background-size: 12.5% 100%; }
+  .period-bar { position: absolute; top: 5px; height: 18px; border-radius: 4px; color: #fff; font-size: 8px; display: flex; align-items: center; padding: 0 5px; overflow: hidden; white-space: nowrap; }
+  .recommend { margin-left: 8px; color: #a36a15; background: #f5e9cd; padding: 3px 7px; border-radius: 999px; font-size: 9px; font-weight: 700; }
+</style>
+</head>
+<body>
+<section class="sample sample-a" id="sample-a">
+  <div class="meta">
+    <div>
+      <span class="kicker">方案 A · 推荐</span>
+      <h1>自适应时间窗泳道</h1>
+      <p class="sub">根据当天实际任务范围自动缩放到 07:00–23:00，放大时间条；左侧保留任务顺序和准确时间，右侧用颜色区分任务。</p>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#16a34a"></i>已完成</span>
+      <span><i class="dot" style="background:#f59e0b"></i>暂停</span>
+      <span>时间轴自动避开空白时段</span>
+    </div>
+  </div>
+  <div class="chart" id="chart-a"></div>
+  <div class="note">
+    <div><strong>优点</strong>任务条明显变宽，早上和晚上的安排都容易扫读。</div>
+    <div><strong>取舍</strong>不是完整 00–24 点，需要标注当前可见时间范围。</div>
+    <div><strong>适合</strong>大部分日程集中在 07:00–23:00 的日常使用。</div>
+  </div>
+</section>
+
+<section class="sample sample-b" id="sample-b">
+  <div class="meta">
+    <div>
+      <span class="kicker">方案 B</span>
+      <h1>24 小时全景 + 时间卡片</h1>
+      <p class="sub">保留完整 00:00–24:00，任务以带标题的白底彩边卡片展示，卡片下方保留精确时长细线。</p>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#16a34a"></i>已完成</span>
+      <span><i class="dot" style="background:#f59e0b"></i>暂停</span>
+      <span>完整查看一天</span>
+    </div>
+  </div>
+  <div class="chart" id="chart-b"></div>
+  <div class="note">
+    <div><strong>优点</strong>完整展示凌晨到深夜，任务名称直接可读，视觉更像日程卡片。</div>
+    <div><strong>取舍</strong>凌晨空白多，普通时段任务条仍偏窄；卡片可能延伸超过真实结束时间。</div>
+    <div><strong>适合</strong>需要同时查看凌晨、跨时段任务或完整一天的情况。</div>
+  </div>
+</section>
+
+<section class="sample sample-c" id="sample-c">
+  <div class="meta">
+    <div>
+      <span class="kicker">方案 C</span>
+      <h1>上午 / 下午 / 晚上分段日程</h1>
+      <p class="sub">把一天拆成三个时段，每个时段都有自己的时间轴；任务顺序和颜色不变，但一屏只需要读一小段。</p>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#16a34a"></i>已完成</span>
+      <span><i class="dot" style="background:#f59e0b"></i>暂停</span>
+      <span>按生活节奏分段</span>
+    </div>
+  </div>
+  <div class="periods" id="periods-c"></div>
+  <div class="note">
+    <div><strong>优点</strong>不用在一条很长的轴上找任务，上午 / 下午 / 晚上一眼分段。</div>
+    <div><strong>取舍</strong>时间轴被拆开，跨段任务需要跨区对照，整体高度更大。</div>
+    <div><strong>适合</strong>任务主要集中在固定三段、希望快速浏览的人。</div>
+  </div>
+</section>
+
+<script>
+  const tasks = [
+    { title: "记单词", start: "07:30", end: "08:00" },
+    { title: "背申论素材", start: "08:00", end: "08:30" },
+    { title: "背专业相关知识", start: "08:30", end: "09:15" },
+    { title: "学习数学", start: "09:25", end: "10:55", done: true },
+    { title: "自由学习 / 复盘", start: "11:00", end: "12:00" },
+    { title: "看行测网课", start: "14:00", end: "15:10" },
+    { title: "刷题", start: "15:20", end: "16:00" },
+    { title: "看行测网课", start: "16:10", end: "17:10" },
+    { title: "申论轻量输入 / 行测", start: "17:10", end: "18:00" },
+    { title: "专业知识学习", start: "19:30", end: "21:00" },
+    { title: "自由学习 / 总结", start: "21:10", end: "22:00", paused: true },
+    { title: "日记 + 次日规划", start: "22:00", end: "22:30" },
+  ];
+  const colors = ["#2563eb","#7c3aed","#db2777","#dc2626","#ea580c","#ca8a04","#16a34a","#0d9488","#0891b2","#6d28d9","#a21caf","#be123c"];
+  const now = 21 * 60 + 35;
+  const minutes = (value) => { const [h,m] = value.split(":").map(Number); return h*60+m; };
+  const colorFor = (i) => colors[i] || `hsl(${Math.round((i*137.508)%360)} 66% 42%)`;
+  const esc = (s) => s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+
+  function axis(start, end, step = 2) {
+    let html = '<div class="axis">';
+    for (let m = start; m <= end; m += step*60) {
+      const cls = m === start ? "axis-label first" : m === end ? "axis-label last" : "axis-label";
+      html += `<span class="${cls}" style="left:${((m-start)/(end-start))*100}%">${String(Math.floor(m/60)).padStart(2,"0")}:00</span>`;
+    }
+    return html + "</div>";
+  }
+
+  function renderA() {
+    const start = 7*60, end = 23*60;
+    const pct = (m) => ((m-start)/(end-start))*100;
+    let html = `<div class="chart-row"><div></div>${axis(start,end,2)}</div><div class="rows">`;
+    tasks.forEach((task,i) => {
+      const s = minutes(task.start), e = minutes(task.end);
+      const width = Math.max(pct(e)-pct(s), 0.8);
+      const showText = width >= 7;
+      html += `<div class="row"><div class="label"><span class="order">${i+1}</span><div class="label-main"><div class="title">${esc(task.title)}</div><div class="time">${task.start} – ${task.end}</div></div></div><div class="track"><div class="bar" title="${esc(task.title)} ${task.start}–${task.end}" style="left:${pct(s)}%;width:${width}%;background:${colorFor(i)};${task.done ? "opacity:.52;" : ""}">${showText ? esc(task.title) : ""}</div></div></div>`;
+    });
+    html += `<div class="row"><div class="label"><span class="order">13</span><div class="label-main"><div class="title">整理资料</div><div class="time">全天</div></div></div><div class="track all-day"><div class="bar" style="left:0;width:100%;background:repeating-linear-gradient(45deg,#cbd5cf33 0 6px,transparent 6px 12px);border-color:#94a3a0">全天任务</div></div></div>`;
+    html += "</div>";
+    document.getElementById("chart-a").innerHTML = html;
+  }
+
+  function renderB() {
+    const start = 0, end = 24*60;
+    const pct = (m) => (m/(24*60))*100;
+    let html = `<div class="chart-row"><div></div>${axis(start,end,2)}</div><div class="rows">`;
+    tasks.forEach((task,i) => {
+      const s = minutes(task.start), e = minutes(task.end);
+      html += `<div class="row"><div class="label"><span class="order">${i+1}</span><div class="label-main"><div class="title">${esc(task.title)}</div><div class="time">${task.start} – ${task.end}</div></div></div><div class="track"><div class="start-pin" style="left:${pct(s)}%;background:${colorFor(i)}"></div><div class="task-card" style="left:${pct(s)}%;border-left-color:${colorFor(i)};${task.done ? "opacity:.55;" : ""}"><div class="card-title">${esc(task.title)}</div><div class="card-time">${task.start} – ${task.end}</div></div><div class="duration" style="left:${pct(s)}%;width:${Math.max(pct(e)-pct(s),0.8)}%;background:${colorFor(i)}"></div></div></div>`;
+    });
+    html += "</div>";
+    document.getElementById("chart-b").innerHTML = html;
+  }
+
+  function renderC() {
+    const groups = [
+      { title: "上午", start: 7*60, end: 12*60, from: 7*60, to: 12*60 },
+      { title: "下午", start: 12*60, end: 18*60, from: 12*60, to: 18*60 },
+      { title: "晚上", start: 18*60, end: 23*60, from: 18*60, to: 23*60 },
+    ];
+    let out = "";
+    groups.forEach((group) => {
+      const groupTasks = tasks.filter((task) => minutes(task.start) >= group.start && minutes(task.start) < group.end);
+      const range = group.end - group.start;
+      const pct = (m) => ((m-group.start)/range)*100;
+      let html = `<div class="period"><div class="period-head"><span class="period-title">${group.title}</span><span class="period-range">${String(group.start/60).padStart(2,"0")}:00 – ${String(group.end/60).padStart(2,"0")}:00</span></div><div class="period-axis">`;
+      for (let m = group.start; m <= group.end; m += 60) html += `<span style="left:${pct(m)}%">${String(m/60).padStart(2,"0")}</span>`;
+      html += "</div>";
+      groupTasks.forEach((task) => {
+        const i = tasks.indexOf(task);
+        const s = minutes(task.start), e = minutes(task.end);
+        const width = Math.max(pct(e)-pct(s), 1);
+        html += `<div class="period-row"><div class="period-label"><span class="swatch" style="background:${colorFor(i)}"></span><span class="p-title">${esc(task.title)}</span><span class="p-time">${task.start}</span></div><div class="period-track"><div class="period-bar" style="left:${pct(s)}%;width:${width}%;background:${colorFor(i)};${task.done ? "opacity:.5;" : ""}">${width > 15 ? esc(task.title) : ""}</div></div></div>`;
+      });
+      out += html + "</div>";
+    });
+    document.getElementById("periods-c").innerHTML = out;
+  }
+
+  renderA(); renderB(); renderC();
+</script>
+</body>
+</html>

@@ -3,7 +3,6 @@ import type { DayItem, Task } from "@/types/domain";
 import { isItemDone } from "@/features/day/day-items";
 import { cn } from "@/lib/utils";
 
-const HOUR_MARKS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
 const PALETTE = [
   "#2563EB",
   "#7C3AED",
@@ -18,6 +17,36 @@ const PALETTE = [
   "#9333EA",
   "#BE123C",
 ];
+
+interface Period {
+  id: string;
+  label: string;
+  start: number;
+  end: number;
+}
+
+const PERIODS: Period[] = [
+  { id: "dawn", label: "凌晨", start: 0, end: 6 * 60 },
+  { id: "morning", label: "上午", start: 6 * 60, end: 12 * 60 },
+  { id: "afternoon", label: "下午", start: 12 * 60, end: 18 * 60 },
+  { id: "evening", label: "晚上", start: 18 * 60, end: 24 * 60 },
+];
+
+interface PositionedRow {
+  item: DayItem;
+  order: number;
+  periodIndex: number;
+  start: number;
+  end: number;
+  kind: "range" | "deadline";
+  color: string;
+}
+
+interface AllDayRow {
+  item: DayItem;
+  order: number;
+  color: string;
+}
 
 function timeToMinutes(value: string | null): number | null {
   if (!value) return null;
@@ -38,26 +67,34 @@ function timeLabel(task: Task): string {
   return "全天";
 }
 
-interface TimelineRow {
-  item: DayItem;
-  order: number;
-  start: number | null;
-  end: number | null;
-  color: string;
-  kind: "range" | "deadline" | "all-day";
+/** 把分钟数转换为“小时/分钟”展示，例如 130 -> 2小时10分。 */
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}分钟`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `${hours}小时${rest}分` : `${hours}小时`;
 }
 
-function buildRows(items: DayItem[]): TimelineRow[] {
+function colourFor(index: number): string {
+  return index < PALETTE.length
+    ? PALETTE[index]
+    : `hsl(${Math.round((index * 137.508) % 360)} 66% 42%)`;
+}
+
+function buildRows(items: DayItem[]): {
+  periods: Array<{ period: Period; rows: PositionedRow[] }>;
+  allDay: AllDayRow[];
+} {
   const scheduled = items.filter(
     (item) => item.kind === "scheduled" && !item.isArchived,
   );
-  const allDay: DayItem[] = [];
   const timed: Array<{
     item: DayItem;
     start: number;
     end: number;
     kind: "range" | "deadline";
   }> = [];
+  const allDay: DayItem[] = [];
 
   for (const item of scheduled) {
     const start = timeToMinutes(item.task.startTime);
@@ -67,36 +104,222 @@ function buildRows(items: DayItem[]): TimelineRow[] {
       continue;
     }
     if (item.task.timeSemantic === "deadline" && end !== null) {
-      timed.push({ item, start: 0, end, kind: "deadline" });
+      timed.push({ item, start: end, end, kind: "deadline" });
       continue;
     }
     timed.push({
       item,
       start: start ?? 0,
-      end: end ?? start ?? 0,
+      end: Math.max(end ?? start ?? 0, start ?? 0),
       kind: "range",
     });
   }
 
   timed.sort((a, b) => a.start - b.start || a.end - b.end);
-  const ordered = [
-    ...timed,
-    ...allDay.map((item) => ({
-      item,
-      start: 0,
-      end: 24 * 60,
-      kind: "all-day" as const,
-    })),
-  ];
+  const ordered: Array<{
+    item: DayItem;
+    start: number;
+    end: number;
+    kind: "range" | "deadline";
+    periodIndex: number;
+    order: number;
+    color: string;
+  }> = [];
 
-  return ordered.map((row, index) => ({
-    ...row,
-    order: index + 1,
-    color:
-      index < PALETTE.length
-        ? PALETTE[index]
-        : `hsl(${Math.round((index * 137.508) % 360)} 66% 42%)`,
-  }));
+  timed.forEach((row, index) => {
+    const periodIndex = Math.max(
+      0,
+      PERIODS.findIndex(
+        (period) => row.start >= period.start && row.start < period.end,
+      ),
+    );
+    ordered.push({
+      ...row,
+      periodIndex,
+      order: index + 1,
+      color: colourFor(index),
+    });
+  });
+
+  const periods = PERIODS.map((period, periodIndex) => ({
+    period,
+    rows: ordered.filter((row) => row.periodIndex === periodIndex),
+  })).filter((entry) => entry.rows.length > 0);
+
+  return {
+    periods,
+    allDay: allDay.map((item, index) => ({
+      item,
+      order: timed.length + index + 1,
+      color: colourFor(timed.length + index),
+    })),
+  };
+}
+
+function PeriodChart({
+  period,
+  rows,
+  nowMinutes,
+  today,
+  date,
+}: {
+  period: Period;
+  rows: PositionedRow[];
+  nowMinutes: number | null;
+  today: string;
+  date: string;
+}) {
+  const durationMinutes = period.end - period.start;
+  const showNow =
+    date === today &&
+    nowMinutes !== null &&
+    nowMinutes >= period.start &&
+    nowMinutes < period.end;
+  const nowPercent = showNow
+    ? ((nowMinutes - period.start) / durationMinutes) * 100
+    : null;
+  const axisHours = Array.from(
+    { length: durationMinutes / 60 + 1 },
+    (_, index) => period.start + index * 60,
+  );
+
+  return (
+    <section className="rounded-xl border border-border/80 bg-background/45 p-3">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h3 className="text-xs font-semibold">{period.label}</h3>
+        <span className="text-[10px] tabular-nums text-muted-foreground">
+          {String(period.start / 60).padStart(2, "0")}:00 –{" "}
+          {String(period.end / 60).padStart(2, "0")}:00
+        </span>
+      </div>
+
+      <div
+        className="grid items-end gap-x-2"
+        style={{ gridTemplateColumns: "178px minmax(0, 1fr)" }}
+      >
+        <div />
+        <div className="relative h-4 border-b border-border/70">
+          {axisHours.map((minutes) => {
+            const percent = ((minutes - period.start) / durationMinutes) * 100;
+            const isFirst = minutes === period.start;
+            const isLast = minutes === period.end;
+            return (
+              <span
+                key={minutes}
+                className={cn(
+                  "absolute text-[9px] tabular-nums text-muted-foreground",
+                  isFirst
+                    ? "translate-x-0"
+                    : isLast
+                      ? "-translate-x-full"
+                      : "-translate-x-1/2",
+                )}
+                style={{ left: `${percent}%` }}
+              >
+                {String(minutes / 60).padStart(2, "0")}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="relative">
+        {rows.map((row) => {
+          const start = Math.max(row.start, period.start);
+          const end = Math.min(row.end, period.end);
+          const left = ((start - period.start) / durationMinutes) * 100;
+          const width = Math.max(((end - start) / durationMinutes) * 100, 1.2);
+          const minutes = row.end - row.start;
+          const duration =
+            row.kind === "deadline"
+              ? "截止"
+              : formatDuration(Math.max(minutes, 0));
+          const showDuration = width >= 4.5;
+          const done = isItemDone(row.item);
+          const paused = row.item.isPaused;
+
+          return (
+            <div
+              key={row.item.key}
+              className="grid min-h-9 items-center gap-x-2 border-t border-border/40 first:border-t-0"
+              style={{ gridTemplateColumns: "178px minmax(0, 1fr)" }}
+            >
+              <div className="flex min-w-0 items-center gap-2 py-1">
+                <span
+                  className="h-[11px] w-[11px] shrink-0 rounded-[2px]"
+                  style={{ backgroundColor: row.color }}
+                />
+                <span
+                  className={cn(
+                    "min-w-0 truncate text-[11px] font-medium",
+                    done && "text-muted-foreground line-through",
+                  )}
+                  title={row.item.task.title}
+                >
+                  {row.item.task.title}
+                </span>
+                <span className="ml-auto shrink-0 text-[9px] tabular-nums text-muted-foreground">
+                  {timeLabel(row.item.task)}
+                </span>
+              </div>
+
+              <div className="relative h-8 overflow-hidden border-x border-border/60 bg-muted/15">
+                <div
+                  className="pointer-events-none absolute inset-0 opacity-60"
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(to right, hsl(var(--border) / 0.45) 0 1px, transparent 1px 16.6667%)",
+                  }}
+                />
+                {nowPercent !== null ? (
+                  <div
+                    className="absolute inset-y-0 z-20 w-px bg-rose-500/80"
+                    style={{ left: `${nowPercent}%` }}
+                    title="当前时间"
+                  />
+                ) : null}
+
+                <div
+                  className={cn(
+                    "absolute top-1 z-10 flex h-6 items-center justify-center overflow-hidden rounded px-1 text-[9px] font-semibold text-white",
+                    paused && "border border-dashed border-white/80",
+                    done && "opacity-55",
+                  )}
+                  style={{
+                    left: `${left}%`,
+                    width: `max(${width}%, 2.25rem)`,
+                    backgroundColor:
+                      row.kind === "deadline" ? "transparent" : row.color,
+                    color: row.kind === "deadline" ? row.color : undefined,
+                  }}
+                  title={`${row.item.task.title} · ${duration}`}
+                >
+                  {row.kind === "deadline" ? (
+                    <>
+                      <span
+                        className="absolute inset-x-0 top-1/2 border-t border-dashed"
+                        style={{ borderColor: row.color }}
+                      />
+                      <span
+                        className="relative z-10 h-2 w-2 rotate-45 border border-white"
+                        style={{ backgroundColor: row.color }}
+                      />
+                    </>
+                  ) : showDuration ? (
+                    <span className="w-full truncate text-center tabular-nums">
+                      {duration}
+                    </span>
+                  ) : (
+                    <span className="w-full text-center">…</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 export function DayTimeline({
@@ -112,11 +335,10 @@ export function DayTimeline({
   nowTime: string;
   className?: string;
 }) {
-  const rows = buildRows(items);
-  if (rows.length === 0) return null;
+  const { periods, allDay } = buildRows(items);
+  if (periods.length === 0 && allDay.length === 0) return null;
 
   const nowMinutes = date === today ? timeToMinutes(nowTime) : null;
-  const showNow = nowMinutes !== null;
 
   return (
     <section
@@ -132,171 +354,83 @@ export function DayTimeline({
             当天时间轴
           </h2>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            横轴为时间，纵轴为任务顺序；颜色用于区分任务。
+            按上午 / 下午 / 晚上分段；左侧为任务与时间，右侧白色数字为预计花费时间。
           </p>
         </div>
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-emerald-600" />
+            <span className="h-2.5 w-2.5 rounded-[2px] bg-emerald-600" />
             已完成
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full border border-dashed border-amber-600" />
+            <span className="h-2.5 w-2.5 rounded-[2px] border border-dashed border-amber-600" />
             暂停
           </span>
-          <span>{rows.length} 项</span>
+          <span>{periods.reduce((total, entry) => total + entry.rows.length, 0) + allDay.length} 项</span>
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto scrollbar-thin">
-        <div className="min-w-[720px]">
-          <div
-            className="grid items-end gap-x-3"
-            style={{ gridTemplateColumns: "9rem minmax(0, 1fr)" }}
-          >
-            <div />
-            <div className="relative h-5 border-b border-border/80">
-              {HOUR_MARKS.map((hour) => (
-                <span
-                  key={hour}
-                  className={cn(
-                    "absolute text-[10px] tabular-nums text-muted-foreground",
-                    hour === 0
-                      ? "translate-x-0"
-                      : hour === 24
-                        ? "-translate-x-full"
-                        : "-translate-x-1/2",
-                  )}
-                  style={{ left: `${(hour / 24) * 100}%` }}
-                >
-                  {String(hour).padStart(2, "0")}:00
-                </span>
-              ))}
+      <div className="mt-4 space-y-2.5">
+        {periods.map((entry) => (
+          <PeriodChart
+            key={entry.period.id}
+            period={entry.period}
+            rows={entry.rows}
+            nowMinutes={nowMinutes}
+            today={today}
+            date={date}
+          />
+        ))}
+
+        {allDay.length > 0 ? (
+          <section className="rounded-xl border border-border/80 bg-background/45 p-3">
+            <div className="mb-2 flex items-baseline justify-between">
+              <h3 className="text-xs font-semibold">全天</h3>
+              <span className="text-[10px] text-muted-foreground">
+                不设具体时间段
+              </span>
             </div>
-          </div>
-
-          <div className="max-h-[560px] space-y-0.5 overflow-y-auto pr-1 scrollbar-thin">
-            {rows.map((row) => {
-              const done = isItemDone(row.item);
-              const paused = row.item.isPaused;
-              const label = timeLabel(row.item.task);
-              const left =
-                row.kind === "deadline"
-                  ? ((row.end ?? 0) / (24 * 60)) * 100
-                  : ((row.start ?? 0) / (24 * 60)) * 100;
-              const width =
-                row.kind === "all-day"
-                  ? 100
-                  : row.kind === "deadline"
-                    ? left
-                    : Math.max((((row.end ?? 0) - (row.start ?? 0)) / (24 * 60)) * 100, 0.8);
-              const showBarLabel = row.kind === "all-day" || width >= 6;
-
-              return (
+            <div className="space-y-1.5">
+              {allDay.map((row) => (
                 <div
                   key={row.item.key}
-                  className="grid items-center gap-x-3"
-                  style={{ gridTemplateColumns: "9rem minmax(0, 1fr)" }}
+                  className="grid min-h-8 items-center gap-x-2"
+                  style={{ gridTemplateColumns: "178px minmax(0, 1fr)" }}
                 >
-                  <div className="flex min-w-0 items-center gap-2 py-1">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] font-semibold tabular-nums text-muted-foreground">
-                      {row.order}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="h-[11px] w-[11px] shrink-0 rounded-[2px]"
+                      style={{ backgroundColor: row.color }}
+                    />
+                    <span className="min-w-0 truncate text-[11px] font-medium">
+                      {row.item.task.title}
                     </span>
-                    <div className="min-w-0">
-                      <p
-                        className={cn(
-                          "truncate text-xs font-medium",
-                          done && "text-muted-foreground line-through",
-                        )}
-                        title={row.item.task.title}
-                      >
-                        {row.item.task.title}
-                      </p>
-                      <p className="truncate text-[10px] tabular-nums text-muted-foreground">
-                        {label}
-                      </p>
+                    <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">
+                      全天
+                    </span>
+                  </div>
+                  <div className="relative h-7 overflow-hidden rounded bg-muted/15">
+                    <div
+                      className="absolute inset-x-0 top-1 flex h-5 items-center justify-center rounded text-[9px] font-semibold text-foreground"
+                      style={{
+                        backgroundColor: `${row.color}22`,
+                        backgroundImage: `repeating-linear-gradient(45deg, ${row.color}33 0 6px, transparent 6px 12px)`,
+                        border: `1px solid ${row.color}66`,
+                      }}
+                    >
+                      全天
                     </div>
                   </div>
-
-                  <div className="relative h-9 overflow-hidden rounded-lg border border-border/60 bg-muted/20">
-                    <div
-                      className="pointer-events-none absolute inset-0 opacity-60"
-                      style={{
-                        backgroundImage:
-                          "repeating-linear-gradient(to right, hsl(var(--border) / 0.55) 0 1px, transparent 1px 12.5%)",
-                      }}
-                    />
-                    {showNow ? (
-                      <div
-                        className="absolute inset-y-0 z-20 w-px bg-rose-500/80"
-                        style={{
-                          left: `${(nowMinutes / (24 * 60)) * 100}%`,
-                        }}
-                        title="当前时间"
-                      />
-                    ) : null}
-
-                    {row.kind === "deadline" ? (
-                      <>
-                        <div
-                          className="absolute top-1/2 h-0 border-t border-dashed"
-                          style={{
-                            left: 0,
-                            width: `${left}%`,
-                            borderColor: row.color,
-                          }}
-                        />
-                        <span
-                          className="absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-white/80"
-                          style={{ left: `${left}%`, backgroundColor: row.color }}
-                        />
-                      </>
-                    ) : (
-                      <div
-                        className={cn(
-                          "absolute top-1 z-10 flex h-7 items-center overflow-hidden rounded-md px-2 text-[10px] font-medium text-white shadow-sm",
-                          paused && "border border-dashed border-white/80 opacity-60",
-                          done && "opacity-55",
-                        )}
-                        style={{
-                          left: `${left}%`,
-                          width:
-                            row.kind === "all-day"
-                              ? "calc(100% - 4px)"
-                              : `max(${width}%, 2.5rem)`,
-                          backgroundColor:
-                            row.kind === "all-day" ? `${row.color}22` : row.color,
-                          backgroundImage:
-                            row.kind === "all-day"
-                              ? `repeating-linear-gradient(45deg, ${row.color}33 0 6px, transparent 6px 12px)`
-                              : undefined,
-                          borderColor: row.kind === "all-day" ? row.color : undefined,
-                        }}
-                        title={row.item.task.title}
-                      >
-                        {showBarLabel ? (
-                          <span
-                            className={cn(
-                              "truncate",
-                              row.kind === "all-day" && "text-foreground",
-                            )}
-                          >
-                            {row.item.task.title}
-                          </span>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
 
       <div className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
         <Clock3 className="h-3 w-3" />
-        时间轴按 0–24 点展示；没有设置时间的任务归入全天行。
+        时间轴按上午 / 下午 / 晚上分段；时间段内按先后顺序排列。
       </div>
     </section>
   );
