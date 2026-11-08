@@ -9,8 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TimeQuickField } from "@/components/ui/date-time-quick-field";
 import { Switch } from "@/components/ui/switch";
 import { useSetTimeOverride, useUpdateTaskTimeFrom } from "@/data/queries";
 import { dateWithWeekday } from "@/lib/date";
@@ -191,16 +191,12 @@ export function TimeAdjustDialog({
           </div>
 
           {timeSemantic === "deadline" ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="adjust-deadline">截止时间（可选）</Label>
-              <Input
-                id="adjust-deadline"
-                type="time"
-                step={60}
-                value={endTime}
-                onChange={(event) => setEndTime(event.target.value)}
-              />
-            </div>
+            <TimeQuickField
+              id="adjust-deadline"
+              label="截止时间（可选）"
+              value={endTime}
+              onChange={setEndTime}
+            />
           ) : (
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-sm font-medium">
@@ -212,27 +208,19 @@ export function TimeAdjustDialog({
                 设置计划时间段
               </label>
               {hasRange ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="adjust-start">开始时间</Label>
-                    <Input
-                      id="adjust-start"
-                      type="time"
-                      step={60}
-                      value={startTime}
-                      onChange={(event) => setStartTime(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="adjust-end">结束时间</Label>
-                    <Input
-                      id="adjust-end"
-                      type="time"
-                      step={60}
-                      value={endTime}
-                      onChange={(event) => setEndTime(event.target.value)}
-                    />
-                  </div>
+                <div className="space-y-3">
+                  <TimeQuickField
+                    id="adjust-start"
+                    label="开始时间"
+                    value={startTime}
+                    onChange={setStartTime}
+                  />
+                  <TimeQuickField
+                    id="adjust-end"
+                    label="结束时间"
+                    value={endTime}
+                    onChange={setEndTime}
+                  />
                 </div>
               ) : (
                 <p className="text-[11px] text-muted-foreground">

@@ -25,6 +25,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DateQuickField,
+  TimeQuickField,
+} from "@/components/ui/date-time-quick-field";
 import { Segmented } from "@/components/ui/segmented";
 import {
   Select,
@@ -740,18 +744,24 @@ export function TaskEditorDialog({
               )}
             >
               <div className="space-y-1.5">
-                <Label htmlFor="task-date">
-                  {values.type === "recurring"
-                    ? "开始日期"
-                    : values.type === "review"
-                      ? "首次学习日期"
-                      : "任务日期"}
-                </Label>
-                <Input
-                  id="task-date"
-                  type="date"
-                  disabled={readOnly || scheduleLocked}
-                  {...register("taskDate")}
+                <Controller
+                  control={control}
+                  name="taskDate"
+                  render={({ field }) => (
+                    <DateQuickField
+                      id="task-date"
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={readOnly || scheduleLocked}
+                      label={
+                        values.type === "recurring"
+                          ? "开始日期"
+                          : values.type === "review"
+                            ? "首次学习日期"
+                            : "任务日期"
+                      }
+                    />
+                  )}
                 />
                 <FieldError message={errors.taskDate?.message} />
                 {values.type === "recurring" ? (
@@ -797,37 +807,52 @@ export function TaskEditorDialog({
             {values.type === "recurring" ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="task-start-time">开始时间</Label>
-                  <Input
-                    id="task-start-time"
-                    type="time"
-                    step={60}
-                    disabled={readOnly}
-                    {...register("startTime")}
+                  <Controller
+                    control={control}
+                    name="startTime"
+                    render={({ field }) => (
+                      <TimeQuickField
+                        id="task-start-time"
+                        label="开始时间"
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabled={readOnly}
+                      />
+                    )}
                   />
                   <FieldError message={errors.startTime?.message} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="task-end-time">结束时间</Label>
-                  <Input
-                    id="task-end-time"
-                    type="time"
-                    step={60}
-                    disabled={readOnly}
-                    {...register("endTime")}
+                  <Controller
+                    control={control}
+                    name="endTime"
+                    render={({ field }) => (
+                      <TimeQuickField
+                        id="task-end-time"
+                        label="结束时间"
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabled={readOnly}
+                      />
+                    )}
                   />
                   <FieldError message={errors.endTime?.message} />
                 </div>
               </div>
             ) : values.timeSemantic === "deadline" ? (
-              <div className="space-y-1.5 sm:max-w-[240px]">
-                <Label htmlFor="task-deadline">截止时间（可选）</Label>
-                <Input
-                  id="task-deadline"
-                  type="time"
-                  step={60}
-                  disabled={readOnly || scheduleLocked}
-                  {...register("endTime")}
+              <div className="space-y-1.5 sm:max-w-md">
+                <Controller
+                  control={control}
+                  name="endTime"
+                  render={({ field }) => (
+                    <TimeQuickField
+                      id="task-deadline"
+                      label="截止时间（可选）"
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={readOnly || scheduleLocked}
+                    />
+                  )}
                 />
                 <FieldError message={errors.endTime?.message} />
               </div>
@@ -845,24 +870,34 @@ export function TaskEditorDialog({
                 {values.hasTimeRange ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label htmlFor="task-start-time">开始时间</Label>
-                      <Input
-                        id="task-start-time"
-                        type="time"
-                        step={60}
-                        disabled={readOnly || scheduleLocked}
-                        {...register("startTime")}
+                      <Controller
+                        control={control}
+                        name="startTime"
+                        render={({ field }) => (
+                          <TimeQuickField
+                            id="task-start-time"
+                            label="开始时间"
+                            value={field.value}
+                            onChange={field.onChange}
+                            disabled={readOnly || scheduleLocked}
+                          />
+                        )}
                       />
                       <FieldError message={errors.startTime?.message} />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="task-end-time">结束时间</Label>
-                      <Input
-                        id="task-end-time"
-                        type="time"
-                        step={60}
-                        disabled={readOnly || scheduleLocked}
-                        {...register("endTime")}
+                      <Controller
+                        control={control}
+                        name="endTime"
+                        render={({ field }) => (
+                          <TimeQuickField
+                            id="task-end-time"
+                            label="结束时间"
+                            value={field.value}
+                            onChange={field.onChange}
+                            disabled={readOnly || scheduleLocked}
+                          />
+                        )}
                       />
                       <FieldError message={errors.endTime?.message} />
                     </div>

@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CalendarX2,
   ChevronLeft,
+  ChevronRight,
   Clock3,
   Plus,
 } from "lucide-react";
@@ -17,11 +18,14 @@ import { useWorkspaceBundle } from "@/data/queries";
 import { buildDaySummary } from "@/domain/day";
 import { useClock, useToday } from "@/hooks/useToday";
 import {
+  addDaysKey,
   dateWithWeekday,
   isValidDateKey,
   nowTimeKey,
   shortDateLabel,
 } from "@/lib/date";
+import { Input } from "@/components/ui/input";
+import { DayTimeline } from "@/features/day/day-timeline";
 import { DayProgressSummary } from "@/features/day/day-progress-summary";
 import { DaySection } from "@/features/day/day-section";
 import { DaySkeleton } from "@/features/day/day-skeleton";
@@ -175,9 +179,55 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
             <Badge variant="accent">已跨天</Badge>
           ) : null}
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          月历 · {shortDateLabel(date)}
-        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => navigate(`/day/${addDaysKey(date, -1)}`)}
+            aria-label="前一天"
+            title="前一天"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Input
+            type="date"
+            value={date}
+            onChange={(event) => {
+              if (isValidDateKey(event.target.value)) {
+                navigate(`/day/${event.target.value}`);
+              }
+            }}
+            className="h-8 w-[9.5rem] bg-card text-xs"
+            aria-label="选择日期"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => navigate(`/day/${addDaysKey(date, 1)}`)}
+            aria-label="后一天"
+            title="后一天"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {!isToday ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => navigate(`/day/${today}`)}
+            >
+              回到今天
+            </Button>
+          ) : null}
+          <p className="ml-1 text-[11px] text-muted-foreground">
+            月历 · {shortDateLabel(date)}
+          </p>
+        </div>
       </div>
 
       <PageHeader
@@ -223,6 +273,15 @@ export function DayPage({ onCreateTask, onEditTask }: DayPageProps) {
             historyCount={historyTotal}
             isFuture={isFuture}
           />
+
+          {!isEmpty ? (
+            <DayTimeline
+              items={summary.items}
+              date={date}
+              today={today}
+              nowTime={nowTime}
+            />
+          ) : null}
 
           {isEmpty ? (
             <EmptyState
