@@ -8,18 +8,19 @@ RhythNote 把「循环任务」「记忆复习」和「每日记录」分开：�
 
 ## 当前版本
 
-`v0.1.7` · Windows 10/11 x64
+`v0.1.8` · Windows 10/11 x64
 
-当前版本在 0.1.5 基础上增加日期详情时间轴图表与更便捷的日期时间选择；首页保持紧凑。
+当前版本新增「我的计划」分组任务列表：每条计划可包含多个可勾选子任务。
 
 | 文件 | 说明 |
 |---|---|
-| `RhythNote_0.1.7_x64-setup.exe` | NSIS 安装包，本地构建 |
-| `RhythNote.exe` | 便携版，直接运行 |
+| [RhythNote_0.1.8_x64-setup.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.8/RhythNote_0.1.8_x64-setup.exe) | NSIS 安装包，推荐 |
+| [RhythNote.exe](https://github.com/zdkwa/RhythNote/releases/download/v0.1.8/RhythNote.exe) | 便携版，直接运行 |
+| [GitHub Release](https://github.com/zdkwa/RhythNote/releases/tag/v0.1.8) | 版本发布页与 SHA256 |
 
 安装包未做代码签名。Windows SmartScreen 提示时，选择「更多信息 → 仍要运行」。
 
-> `v0.1.7` 仅本地构建，暂未上传 GitHub。
+> `v0.1.8` 已发布到 GitHub Release。
 
 ## 界面预览
 
@@ -198,13 +199,14 @@ docs/
 
 ## 版本记录
 
-### 0.1.8（源码开发中，待打包）
+### 0.1.8
 
 - 新增左侧导航「我的计划」。
 - 每条计划可以包含多个子任务，子任务支持完成勾选。
 - 计划与子任务都支持添加、编辑、删除；计划卡片显示完成进度。
 - 计划不绑定日期或时间。
-- 新增 `plans`、`plan_items` SQLite 表；尚未重新打包或上传 GitHub。
+- 新增 `plans`、`plan_items` SQLite 表。
+- 已发布 GitHub Release `v0.1.8`。
 
 ### 0.1.7
 
