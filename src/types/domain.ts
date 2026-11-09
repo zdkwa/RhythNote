@@ -117,6 +117,13 @@ export interface DayItem {
   isBackfilled: boolean;
 }
 
+export interface Plan {
+  id: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CategoryInput {
   name: string;
   color: string;

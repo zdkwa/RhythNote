@@ -9,6 +9,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { HomePage } from "@/pages/home-page";
 import { DayRoute } from "@/pages/day-route";
 import { TasksPage } from "@/pages/tasks-page";
+import { PlansPage } from "@/pages/plans-page";
 import { SettingsPage } from "@/pages/settings-page";
 import { NotFoundPage } from "@/pages/not-found-page";
 
@@ -24,6 +25,7 @@ export default function App() {
                   <Route index element={<HomePage />} />
                   <Route path="day/:date" element={<DayRoute />} />
                   <Route path="tasks" element={<TasksPage />} />
+                  <Route path="plans" element={<PlansPage />} />
                   <Route
                     path="tasks/once"
                     element={<Navigate to="/tasks?type=once" replace />}

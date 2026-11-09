@@ -3,6 +3,7 @@ import {
   CircleDot,
   ListTodo,
   Moon,
+  NotebookPen,
   Plus,
   Settings,
   Sun,
@@ -147,6 +148,7 @@ export function Sidebar() {
             首页
           </NavLink>
           <NavItem to="/tasks" label="全部任务" icon={ListTodo} end />
+          <NavItem to="/plans" label="我的计划" icon={NotebookPen} end />
         </div>
 
         <div>

@@ -4,6 +4,7 @@ import type {
   CategoryInput,
   DailyRecord,
   OccurrenceTimeOverride,
+  Plan,
   Tag,
   TagInput,
   Task,
@@ -55,6 +56,7 @@ export class MemoryRepository implements Repository {
   private records: DailyRecord[] = [];
   private pauses: TaskPause[] = [];
   private timeOverrides: OccurrenceTimeOverride[] = [];
+  private plans: Plan[] = [];
   private checkinDates = new Set<string>();
   private theme: ThemeMode = "system";
 
@@ -865,6 +867,43 @@ export class MemoryRepository implements Repository {
       (override) =>
         !(override.taskId === taskId && override.occurrenceDate >= fromDate),
     );
+  }
+
+  async listPlans(): Promise<Plan[]> {
+    return this.plans
+      .slice()
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((plan) => ({ ...plan }));
+  }
+
+  async createPlan(content: string): Promise<Plan> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new Error("计划内容不能为空");
+    if (trimmed.length > 5000) throw new Error("计划内容不能超过 5000 个字符");
+    const now = nowIso();
+    const plan: Plan = {
+      id: uuid(),
+      content: trimmed,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.plans.push(plan);
+    return { ...plan };
+  }
+
+  async updatePlan(id: string, content: string): Promise<Plan> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new Error("计划内容不能为空");
+    if (trimmed.length > 5000) throw new Error("计划内容不能超过 5000 个字符");
+    const plan = this.plans.find((item) => item.id === id);
+    if (!plan) throw new Error("计划不存在");
+    plan.content = trimmed;
+    plan.updatedAt = nowIso();
+    return { ...plan };
+  }
+
+  async deletePlan(id: string): Promise<void> {
+    this.plans = this.plans.filter((plan) => plan.id !== id);
   }
 
   async getTheme(): Promise<ThemeMode> {

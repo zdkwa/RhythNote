@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { repository } from "@/data";
+import { queryClient } from "@/app/queryClient";
 import {
   invalidateAll,
   invalidateRecordsAndCalendar,
@@ -20,6 +21,7 @@ import type { DailyRecordInput } from "@/data/repository";
 export const keys = {
   categories: ["categories"] as const,
   tags: ["tags"] as const,
+  plans: ["plans"] as const,
   tasks: (includeArchived: boolean) => ["tasks", { includeArchived }] as const,
   records: (start: string, end: string) => ["records", start, end] as const,
   pauses: (start: string, end: string) => ["pauses", start, end] as const,
@@ -296,6 +298,39 @@ export function useDeleteTag() {
   return useMutation({
     mutationFn: (id: string) => repository.deleteTag(id),
     onSuccess: invalidateAll,
+  });
+}
+
+export function usePlans() {
+  return useQuery({
+    queryKey: keys.plans,
+    queryFn: () => repository.listPlans(),
+  });
+}
+
+const invalidatePlans = () => {
+  void queryClient.invalidateQueries({ queryKey: keys.plans });
+};
+
+export function useCreatePlan() {
+  return useMutation({
+    mutationFn: (content: string) => repository.createPlan(content),
+    onSuccess: invalidatePlans,
+  });
+}
+
+export function useUpdatePlan() {
+  return useMutation({
+    mutationFn: ({ id, content }: { id: string; content: string }) =>
+      repository.updatePlan(id, content),
+    onSuccess: invalidatePlans,
+  });
+}
+
+export function useDeletePlan() {
+  return useMutation({
+    mutationFn: (id: string) => repository.deletePlan(id),
+    onSuccess: invalidatePlans,
   });
 }
 

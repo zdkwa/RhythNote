@@ -10,6 +10,7 @@ import type {
   TaskPause,
   ThemeMode,
   OccurrenceTimeOverride,
+  Plan,
 } from "@/types/domain";
 
 export interface DailyRecordInput {
@@ -68,6 +69,11 @@ export interface Repository {
     endTime: string | null,
     fromDate: string,
   ): Promise<void>;
+
+  listPlans(): Promise<Plan[]>;
+  createPlan(content: string): Promise<Plan>;
+  updatePlan(id: string, content: string): Promise<Plan>;
+  deletePlan(id: string): Promise<void>;
 
   getTheme(): Promise<ThemeMode>;
   setTheme(theme: ThemeMode): Promise<void>;

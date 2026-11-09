@@ -14,6 +14,7 @@ import type {
   ThemeMode,
   OccurrenceTimeOverride,
   ReviewAnchor,
+  Plan,
 } from "@/types/domain";
 import { uuid } from "@/lib/utils";
 import { todayKey } from "@/lib/date";
@@ -84,6 +85,22 @@ interface TimeOverrideRow {
   start_time: string | null;
   end_time: string | null;
   updated_at: string;
+}
+
+interface PlanRow {
+  id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapPlan(row: PlanRow): Plan {
+  return {
+    id: row.id,
+    content: row.content,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function parseReviewIntervals(value: string | null): number[] | null {
@@ -739,6 +756,56 @@ export class SqliteRepository implements Repository {
       "DELETE FROM occurrence_time_overrides WHERE task_id = $1 AND occurrence_date >= $2",
       [taskId, fromDate],
     );
+  }
+
+  async listPlans(): Promise<Plan[]> {
+    const db = await getDb();
+    const rows = await db.select<PlanRow[]>(
+      "SELECT * FROM plans ORDER BY updated_at DESC, created_at DESC",
+    );
+    return rows.map(mapPlan);
+  }
+
+  async createPlan(content: string): Promise<Plan> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new Error("计划内容不能为空");
+    if (trimmed.length > 5000) throw new Error("计划内容不能超过 5000 个字符");
+    const db = await getDb();
+    const now = new Date().toISOString();
+    const plan: Plan = {
+      id: uuid(),
+      content: trimmed,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.execute(
+      "INSERT INTO plans (id, content, created_at, updated_at) VALUES ($1, $2, $3, $3)",
+      [plan.id, plan.content, now],
+    );
+    return plan;
+  }
+
+  async updatePlan(id: string, content: string): Promise<Plan> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new Error("计划内容不能为空");
+    if (trimmed.length > 5000) throw new Error("计划内容不能超过 5000 个字符");
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.execute(
+      "UPDATE plans SET content = $1, updated_at = $2 WHERE id = $3",
+      [trimmed, now, id],
+    );
+    const rows = await db.select<PlanRow[]>(
+      "SELECT * FROM plans WHERE id = $1",
+      [id],
+    );
+    if (!rows[0]) throw new Error("计划不存在");
+    return mapPlan(rows[0]);
+  }
+
+  async deletePlan(id: string): Promise<void> {
+    const db = await getDb();
+    await db.execute("DELETE FROM plans WHERE id = $1", [id]);
   }
 
   async getTheme(): Promise<ThemeMode> {
