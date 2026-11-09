@@ -15,6 +15,7 @@ import type {
   OccurrenceTimeOverride,
   ReviewAnchor,
   Plan,
+  PlanItem,
 } from "@/types/domain";
 import { uuid } from "@/lib/utils";
 import { todayKey } from "@/lib/date";
@@ -94,10 +95,33 @@ interface PlanRow {
   updated_at: string;
 }
 
-function mapPlan(row: PlanRow): Plan {
+interface PlanItemRow {
+  id: string;
+  plan_id: string;
+  content: string;
+  is_done: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapPlan(row: PlanRow, items: PlanItem[]): Plan {
   return {
     id: row.id,
     content: row.content,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    items,
+  };
+}
+
+function mapPlanItem(row: PlanItemRow): PlanItem {
+  return {
+    id: row.id,
+    planId: row.plan_id,
+    content: row.content,
+    isDone: row.is_done === 1,
+    sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -758,12 +782,42 @@ export class SqliteRepository implements Repository {
     );
   }
 
+  private async loadPlanItems(planIds: string[]): Promise<Map<string, PlanItem[]>> {
+    const map = new Map<string, PlanItem[]>();
+    if (planIds.length === 0) return map;
+    const db = await getDb();
+    const placeholders = planIds.map((_, index) => `$${index + 1}`).join(", ");
+    const rows = await db.select<PlanItemRow[]>(
+      `SELECT * FROM plan_items WHERE plan_id IN (${placeholders})
+       ORDER BY sort_order ASC, created_at ASC`,
+      planIds,
+    );
+    for (const row of rows) {
+      const list = map.get(row.plan_id) ?? [];
+      list.push(mapPlanItem(row));
+      map.set(row.plan_id, list);
+    }
+    return map;
+  }
+
+  private async getPlanWithItems(id: string): Promise<Plan> {
+    const db = await getDb();
+    const rows = await db.select<PlanRow[]>(
+      "SELECT * FROM plans WHERE id = $1",
+      [id],
+    );
+    if (!rows[0]) throw new Error("计划不存在");
+    const items = await this.loadPlanItems([id]);
+    return mapPlan(rows[0], items.get(id) ?? []);
+  }
+
   async listPlans(): Promise<Plan[]> {
     const db = await getDb();
     const rows = await db.select<PlanRow[]>(
-      "SELECT * FROM plans ORDER BY updated_at DESC, created_at DESC",
+      "SELECT * FROM plans ORDER BY created_at ASC",
     );
-    return rows.map(mapPlan);
+    const items = await this.loadPlanItems(rows.map((row) => row.id));
+    return rows.map((row) => mapPlan(row, items.get(row.id) ?? []));
   }
 
   async createPlan(content: string): Promise<Plan> {
@@ -777,6 +831,7 @@ export class SqliteRepository implements Repository {
       content: trimmed,
       createdAt: now,
       updatedAt: now,
+      items: [],
     };
     await db.execute(
       "INSERT INTO plans (id, content, created_at, updated_at) VALUES ($1, $2, $3, $3)",
@@ -795,17 +850,76 @@ export class SqliteRepository implements Repository {
       "UPDATE plans SET content = $1, updated_at = $2 WHERE id = $3",
       [trimmed, now, id],
     );
-    const rows = await db.select<PlanRow[]>(
-      "SELECT * FROM plans WHERE id = $1",
-      [id],
-    );
-    if (!rows[0]) throw new Error("计划不存在");
-    return mapPlan(rows[0]);
+    return this.getPlanWithItems(id);
   }
 
   async deletePlan(id: string): Promise<void> {
     const db = await getDb();
     await db.execute("DELETE FROM plans WHERE id = $1", [id]);
+  }
+
+  async createPlanItem(planId: string, content: string): Promise<PlanItem> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new Error("子任务内容不能为空");
+    if (trimmed.length > 1000) throw new Error("子任务内容不能超过 1000 个字符");
+    const db = await getDb();
+    const planRows = await db.select<PlanRow[]>(
+      "SELECT id FROM plans WHERE id = $1",
+      [planId],
+    );
+    if (!planRows[0]) throw new Error("计划不存在");
+    const maxRows = await db.select<Array<{ max_order: number | null }>>(
+      "SELECT MAX(sort_order) AS max_order FROM plan_items WHERE plan_id = $1",
+      [planId],
+    );
+    const now = new Date().toISOString();
+    const item: PlanItem = {
+      id: uuid(),
+      planId,
+      content: trimmed,
+      isDone: false,
+      sortOrder: (maxRows[0]?.max_order ?? 0) + 10,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.execute(
+      `INSERT INTO plan_items
+       (id, plan_id, content, is_done, sort_order, created_at, updated_at)
+       VALUES ($1, $2, $3, 0, $4, $5, $5)`,
+      [item.id, planId, item.content, item.sortOrder, now],
+    );
+    return item;
+  }
+
+  async updatePlanItem(id: string, content: string): Promise<PlanItem> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new Error("子任务内容不能为空");
+    if (trimmed.length > 1000) throw new Error("子任务内容不能超过 1000 个字符");
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.execute(
+      "UPDATE plan_items SET content = $1, updated_at = $2 WHERE id = $3",
+      [trimmed, now, id],
+    );
+    const rows = await db.select<PlanItemRow[]>(
+      "SELECT * FROM plan_items WHERE id = $1",
+      [id],
+    );
+    if (!rows[0]) throw new Error("子任务不存在");
+    return mapPlanItem(rows[0]);
+  }
+
+  async setPlanItemDone(id: string, isDone: boolean): Promise<void> {
+    const db = await getDb();
+    await db.execute(
+      "UPDATE plan_items SET is_done = $1, updated_at = $2 WHERE id = $3",
+      [isDone ? 1 : 0, new Date().toISOString(), id],
+    );
+  }
+
+  async deletePlanItem(id: string): Promise<void> {
+    const db = await getDb();
+    await db.execute("DELETE FROM plan_items WHERE id = $1", [id]);
   }
 
   async getTheme(): Promise<ThemeMode> {

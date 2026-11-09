@@ -117,11 +117,22 @@ export interface DayItem {
   isBackfilled: boolean;
 }
 
+export interface PlanItem {
+  id: string;
+  planId: string;
+  content: string;
+  isDone: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Plan {
   id: string;
   content: string;
   createdAt: string;
   updatedAt: string;
+  items: PlanItem[];
 }
 
 export interface CategoryInput {

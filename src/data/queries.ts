@@ -334,6 +334,37 @@ export function useDeletePlan() {
   });
 }
 
+export function useCreatePlanItem() {
+  return useMutation({
+    mutationFn: ({ planId, content }: { planId: string; content: string }) =>
+      repository.createPlanItem(planId, content),
+    onSuccess: invalidatePlans,
+  });
+}
+
+export function useUpdatePlanItem() {
+  return useMutation({
+    mutationFn: ({ id, content }: { id: string; content: string }) =>
+      repository.updatePlanItem(id, content),
+    onSuccess: invalidatePlans,
+  });
+}
+
+export function useSetPlanItemDone() {
+  return useMutation({
+    mutationFn: ({ id, isDone }: { id: string; isDone: boolean }) =>
+      repository.setPlanItemDone(id, isDone),
+    onSuccess: invalidatePlans,
+  });
+}
+
+export function useDeletePlanItem() {
+  return useMutation({
+    mutationFn: (id: string) => repository.deletePlanItem(id),
+    onSuccess: invalidatePlans,
+  });
+}
+
 export function useThemeSetting() {
   return useQuery({
     queryKey: ["settings", "theme"],

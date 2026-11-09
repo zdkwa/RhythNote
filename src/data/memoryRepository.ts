@@ -5,6 +5,7 @@ import type {
   DailyRecord,
   OccurrenceTimeOverride,
   Plan,
+  PlanItem,
   Tag,
   TagInput,
   Task,
@@ -872,8 +873,11 @@ export class MemoryRepository implements Repository {
   async listPlans(): Promise<Plan[]> {
     return this.plans
       .slice()
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((plan) => ({ ...plan }));
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((plan) => ({
+        ...plan,
+        items: plan.items.map((item) => ({ ...item })),
+      }));
   }
 
   async createPlan(content: string): Promise<Plan> {
@@ -886,9 +890,10 @@ export class MemoryRepository implements Repository {
       content: trimmed,
       createdAt: now,
       updatedAt: now,
+      items: [],
     };
     this.plans.push(plan);
-    return { ...plan };
+    return { ...plan, items: [] };
   }
 
   async updatePlan(id: string, content: string): Promise<Plan> {
@@ -899,11 +904,62 @@ export class MemoryRepository implements Repository {
     if (!plan) throw new Error("计划不存在");
     plan.content = trimmed;
     plan.updatedAt = nowIso();
-    return { ...plan };
+    return { ...plan, items: plan.items.map((item) => ({ ...item })) };
   }
 
   async deletePlan(id: string): Promise<void> {
     this.plans = this.plans.filter((plan) => plan.id !== id);
+  }
+
+  async createPlanItem(planId: string, content: string): Promise<PlanItem> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new Error("子任务内容不能为空");
+    if (trimmed.length > 1000) throw new Error("子任务内容不能超过 1000 个字符");
+    const plan = this.plans.find((item) => item.id === planId);
+    if (!plan) throw new Error("计划不存在");
+    const now = nowIso();
+    const item: PlanItem = {
+      id: uuid(),
+      planId,
+      content: trimmed,
+      isDone: false,
+      sortOrder: (plan.items.at(-1)?.sortOrder ?? 0) + 10,
+      createdAt: now,
+      updatedAt: now,
+    };
+    plan.items.push(item);
+    return { ...item };
+  }
+
+  async updatePlanItem(id: string, content: string): Promise<PlanItem> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new Error("子任务内容不能为空");
+    if (trimmed.length > 1000) throw new Error("子任务内容不能超过 1000 个字符");
+    for (const plan of this.plans) {
+      const item = plan.items.find((entry) => entry.id === id);
+      if (!item) continue;
+      item.content = trimmed;
+      item.updatedAt = nowIso();
+      return { ...item };
+    }
+    throw new Error("子任务不存在");
+  }
+
+  async setPlanItemDone(id: string, isDone: boolean): Promise<void> {
+    for (const plan of this.plans) {
+      const item = plan.items.find((entry) => entry.id === id);
+      if (!item) continue;
+      item.isDone = isDone;
+      item.updatedAt = nowIso();
+      return;
+    }
+    throw new Error("子任务不存在");
+  }
+
+  async deletePlanItem(id: string): Promise<void> {
+    for (const plan of this.plans) {
+      plan.items = plan.items.filter((item) => item.id !== id);
+    }
   }
 
   async getTheme(): Promise<ThemeMode> {

@@ -11,6 +11,7 @@ import type {
   ThemeMode,
   OccurrenceTimeOverride,
   Plan,
+  PlanItem,
 } from "@/types/domain";
 
 export interface DailyRecordInput {
@@ -74,6 +75,11 @@ export interface Repository {
   createPlan(content: string): Promise<Plan>;
   updatePlan(id: string, content: string): Promise<Plan>;
   deletePlan(id: string): Promise<void>;
+
+  createPlanItem(planId: string, content: string): Promise<PlanItem>;
+  updatePlanItem(id: string, content: string): Promise<PlanItem>;
+  setPlanItemDone(id: string, isDone: boolean): Promise<void>;
+  deletePlanItem(id: string): Promise<void>;
 
   getTheme(): Promise<ThemeMode>;
   setTheme(theme: ThemeMode): Promise<void>;
